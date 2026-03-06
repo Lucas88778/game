@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v3.2 (視覺強化版)</title>
+<title>Roguelike 生存：極限試煉 v3.3 (續航力升級版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -58,9 +58,11 @@ canvas.height = window.innerHeight;
 let gameState = 'start';
 let keys = {};
 let frameCount = 0;
+let normalKillCount = 0; // 【新增】記錄一般怪物擊殺數
 
 let enemies = [];
 let gems = [];
+let healDrops = []; // 【新增】補血塊陣列
 let projectiles = [];
 let effects = [];
 
@@ -83,7 +85,8 @@ const skillDefinitions = {
         id: 'missile', name: '魔法追蹤彈',
         cooldown: 40, 
         currentCooldown: 0,
-        count: 1, speed: 5, damage: 18, 
+        count: 1, speed: 5, 
+        damage: 25, // 【更新】基礎攻擊力提升為 25
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
@@ -140,6 +143,9 @@ function startGame(skillId) {
     
     player.x = canvas.width / 2;
     player.y = canvas.height / 2;
+    player.hp = player.maxHp;
+    normalKillCount = 0; // 重置擊殺數
+    healDrops = []; // 重置補血塊
     
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
@@ -229,6 +235,33 @@ class Gem {
     draw() {
         ctx.fillStyle = '#4CAF50';
         ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+// 【新增】補血塊類別
+class HealDrop {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.size = 5;
+    }
+    update() {
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (dist < 80) {
+            // 磁吸效果與經驗寶石相同
+            this.x += (player.x - this.x) * 0.1;
+            this.y += (player.y - this.y) * 0.1;
+        }
+        if (dist < player.size + this.size) {
+            // 吃到補血塊，恢復 20 點生命值（不超過上限）
+            player.hp = Math.min(player.maxHp, player.hp + 20);
+            return false; // 標記為刪除
+        }
+        return true;
+    }
+    draw() {
+        ctx.fillStyle = '#FF5252'; // 紅色圓圈
+        ctx.beginPath(); 
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); 
+        ctx.fill();
     }
 }
 
@@ -338,7 +371,6 @@ class Projectile {
         ctx.save(); 
         
         if (this.isSpecial) {
-            // 【更新】光暈稍稍放大 ( shadowBlur 從 12 -> 20 )
             ctx.shadowBlur = 20; 
             ctx.shadowColor = this.isSplit ? 'orange' : 'orangered';
         }
@@ -598,6 +630,11 @@ function gameLoop() {
         if (!gems[i].update()) gems.splice(i, 1);
     }
     
+    // 【新增】更新與繪製補血塊
+    for (let i = healDrops.length - 1; i >= 0; i--) {
+        if (!healDrops[i].update()) healDrops.splice(i, 1);
+    }
+    
     for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!projectiles[i].update()) projectiles.splice(i, 1);
     }
@@ -607,6 +644,7 @@ function gameLoop() {
     }
 
     gems.forEach(g => g.draw());
+    healDrops.forEach(h => h.draw()); // 繪製補血塊
     projectiles.forEach(p => p.draw());
     effects.forEach(e => e.draw());
 
@@ -618,6 +656,16 @@ function gameLoop() {
             for (let g = 0; g < gemCount; g++) {
                 gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
             }
+            
+            // 【新增】一般怪物擊殺計數與補血塊掉落邏輯
+            if (enemies[i].type === 'normal') {
+                normalKillCount++;
+                if (normalKillCount >= 10) {
+                    healDrops.push(new HealDrop(enemies[i].x, enemies[i].y));
+                    normalKillCount = 0; // 重置計數器
+                }
+            }
+
             enemies.splice(i, 1);
         }
     }
