@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.6 (除錯與標記優化版)</title>
+<title>Roguelike 生存：極限試煉 v4.8 (魔王抗性修正版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -100,16 +100,17 @@ const skillDefinitions = {
         id: 'frost', name: '冰霜法環',
         cooldown: 120, 
         currentCooldown: 0,
-        radius: 80, duration: 40, 
-        damage: 1.2, 
+        radius: 60, 
+        duration: 40, 
+        damage: 50, 
         frostCastCount: 0, 
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(65, s.cooldown - 10) }, 
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } 
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 20 } 
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (附加極短凍結)', apply: (s) => s.isSpecial = true }
+        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (命中瞬間結凍)', apply: (s) => s.isSpecial = true }
     }
 };
 
@@ -196,21 +197,28 @@ class Enemy {
         this.maxHp = this.hp;
         this.baseSpeed = this.speed; 
         this.frozenTimer = 0;
-        
         this.frostHitCount = 0;
+        this.slowMultiplier = 1.0;
     }
     update() {
         if (this.frozenTimer > 0) {
             this.frozenTimer--;
+            this.slowMultiplier = 1.0; 
             return;
         }
+        
         const dx = player.x - this.x;
         const dy = player.y - this.y;
         const distSq = dx * dx + dy * dy; 
         
         const dist = Math.sqrt(distSq);
-        this.x += (dx / dist) * this.speed;
-        this.y += (dy / dist) * this.speed;
+        
+        let actualSpeed = this.baseSpeed * this.slowMultiplier;
+        
+        this.x += (dx / dist) * actualSpeed;
+        this.y += (dy / dist) * actualSpeed;
+        
+        this.slowMultiplier = 1.0;
         
         const hitDist = player.size + this.size;
         if (distSq < hitDist * hitDist) {
@@ -234,7 +242,6 @@ class Enemy {
             ctx.font = `16px Arial`;
             ctx.textAlign = 'center';
             let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
-            // 【修復】將 -25 改為 -8，讓標記緊貼魔王頭頂
             ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
     }
@@ -378,6 +385,7 @@ class Projectile {
             const hitDist = e.size + this.size;
             
             if (distSq < hitDist * hitDist) {
+                // 【魔法追蹤彈專屬】大魔王承受 65% 傷害 (35% 減傷)
                 let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
                 e.hp -= actualDamage;
                 this.hitEnemies.add(e);
@@ -428,7 +436,7 @@ class Projectile {
 }
 
 class FrostEffect {
-    constructor(x, y, stats, castCount) {
+    constructor(x, y, stats) {
         this.x = x; this.y = y;
         this.maxRadius = stats.radius;
         this.radius = 0;
@@ -436,8 +444,7 @@ class FrostEffect {
         this.maxDuration = stats.duration; 
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
-        this.castCount = castCount; 
-        this.hitBossesThisCast = new Set();
+        this.processedEnemies = new Set(); 
     }
     update() {
         if (this.radius < this.maxRadius) this.radius += 8; 
@@ -452,24 +459,29 @@ class FrostEffect {
             const distSq = dx * dx + dy * dy; 
             
             if (distSq < this.radius * this.radius) {
-                e.hp -= this.damage;
-                e.speed = e.baseSpeed * 0.75; 
+                // 【修正：冰霜法環專屬緩速抗性】大魔王剩餘 80% 速度，其餘怪物剩餘 60% 速度
+                if (e.type === 'boss') {
+                    e.slowMultiplier = 0.8; 
+                } else {
+                    e.slowMultiplier = 0.6; 
+                }
                 
-                if (this.isSpecial) {
-                    if (e.type === 'boss') {
-                        if (!this.hitBossesThisCast.has(e)) {
-                            this.hitBossesThisCast.add(e);
+                if (!this.processedEnemies.has(e)) {
+                    this.processedEnemies.add(e); 
+                    
+                    // 【修正：移除冰霜法環對大魔王的 35% 減傷】大魔王此處吃滿冰環爆發傷害
+                    e.hp -= this.damage;
+                    
+                    if (this.isSpecial) {
+                        if (e.type === 'boss') {
                             e.frostHitCount++;
-                            
                             if (e.frostHitCount >= 3) {
-                                // 【修復】大魔王凍結時間補償，設為法環停留時間+5，使其與小怪被凍結的視覺時間完全一致
-                                e.frozenTimer = this.maxDuration + 5;
-                                e.frostHitCount = 0;
+                                e.frozenTimer = 30; 
+                                e.frostHitCount = 0; 
                             }
+                        } else {
+                            e.frozenTimer = 30; 
                         }
-                    } else {
-                        // 小怪只要在法環內，每幀都會刷新5幀凍結，視覺上會凍結整個法環停留時間+5幀
-                        e.frozenTimer = 5;
                     }
                 }
             }
@@ -519,8 +531,7 @@ function fireSkill() {
         s.currentCooldown = s.cooldown;
         
     } else if (player.skill === 'frost') {
-        s.frostCastCount = (s.frostCastCount || 0) + 1;
-        effects.push(new FrostEffect(player.x, player.y, s, s.frostCastCount));
+        effects.push(new FrostEffect(player.x, player.y, s));
         s.currentCooldown = s.cooldown;
     }
 }
