@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v3.8.1 (法環施法修正版)</title>
+<title>Roguelike 生存：極限試煉 v3.9 (冰霜領域重製版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -97,17 +97,18 @@ const skillDefinitions = {
     },
     frost: {
         id: 'frost', name: '冰霜法環',
-        cooldown: 132, // 【修正】冷卻時間從 120 增加為 132 幀 (施法變慢)
+        cooldown: 132,
         currentCooldown: 0,
         radius: 80, duration: 40, 
         damage: 1.6, 
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
-            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(40, s.cooldown - 20) },
+            // 【更新】削弱發動頻率強化，每次僅減少 12 幀，且冷卻極限提高到 60 幀
+            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(60, s.cooldown - 12) },
             { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } 
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (完全凍結敵人)', apply: (s) => s.isSpecial = true }
+        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (附加短暫凍結)', apply: (s) => s.isSpecial = true }
     }
 };
 
@@ -429,10 +430,12 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                e.speed = e.baseSpeed * 0.75; 
+                // 【更新】增強緩速效果，讓怪物的速度降為原本的 20% (即 80% 的超強緩速)
+                e.speed = e.baseSpeed * 0.2; 
                 
                 if (this.isSpecial) {
-                    e.frozenTimer = (e.type === 'boss') ? 5 : 30;
+                    // 【更新】極度削弱冰凍時間，大魔王 1 幀(微僵直)，一般怪 10 幀
+                    e.frozenTimer = (e.type === 'boss') ? 1 : 10;
                 }
             }
         }
