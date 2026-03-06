@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.9</title>
+<title>Roguelike 生存：極限試煉 v3.2 (視覺強化版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -90,7 +90,6 @@ const skillDefinitions = {
             { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(12, s.cooldown - 6) },
             { id: 'u3', desc: '分裂魔彈：命中時分裂出小飛彈', apply: (s) => s.splitCount += 1 }
         ],
-        // 【更新】簡化文字敘述，移除光暈提示
         specialUpgrade: { id: 's1', desc: '超級強化：虛空穿透 (皆可穿透一次敵人)', apply: (s) => s.isSpecial = true }
     },
     frost: {
@@ -150,21 +149,28 @@ function startGame(skillId) {
 }
 
 class Enemy {
-    constructor(hpMult, isMiniBoss = false) {
+    constructor(hpMult, type = 'normal') {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.max(canvas.width, canvas.height) / 2 + 50;
         this.x = player.x + Math.cos(angle) * dist;
         this.y = player.y + Math.sin(angle) * dist;
-        this.isMiniBoss = isMiniBoss;
+        this.type = type;
         
-        if (isMiniBoss) {
+        let baseSpeed = 1.5 + Math.random() * 1;
+
+        if (type === 'boss') {
+            this.size = 35; 
+            this.speed = baseSpeed * 0.8; 
+            this.hp = 30 * hpMult * 10.0; 
+            this.emoji = '👻';
+        } else if (type === 'mini') {
             this.size = 18;
-            this.speed = (1.5 + Math.random() * 1) * 0.6; // 【更新】速度降為 0.6 倍
-            this.hp = 30 * hpMult * 2.0; // 【更新】血量提升為 2.0 倍
+            this.speed = baseSpeed * 0.6;
+            this.hp = 30 * hpMult * 2.0;
             this.emoji = '👹';
         } else {
             this.size = 12 + Math.random() * 5;
-            this.speed = 1.5 + Math.random() * 1;
+            this.speed = baseSpeed;
             this.hp = 30 * hpMult;
             this.emoji = '👾';
         }
@@ -302,7 +308,8 @@ class Projectile {
             const dist = Math.hypot(e.x - this.x, e.y - this.y);
             
             if (dist < e.size + this.size) {
-                e.hp -= this.damage;
+                let actualDamage = (e.type === 'boss') ? this.damage * 0.8 : this.damage;
+                e.hp -= actualDamage;
                 this.hitEnemies.add(e);
                 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
@@ -331,7 +338,8 @@ class Projectile {
         ctx.save(); 
         
         if (this.isSpecial) {
-            ctx.shadowBlur = 12; 
+            // 【更新】光暈稍稍放大 ( shadowBlur 從 12 -> 20 )
+            ctx.shadowBlur = 20; 
             ctx.shadowColor = this.isSplit ? 'orange' : 'orangered';
         }
 
@@ -369,7 +377,9 @@ class FrostEffect {
             if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
                 e.hp -= this.damage;
                 e.speed = 0.5;
-                if (this.isSpecial) e.frozenTimer = 60;
+                if (this.isSpecial) {
+                    e.frozenTimer = (e.type === 'boss') ? 30 : 60;
+                }
             }
         });
         return this.duration > 0;
@@ -416,8 +426,7 @@ function levelUp() {
     gameState = 'paused';
     player.level++;
     
-    // 【更新】升級時恢復最大生命的 1/8
-    player.hp = Math.min(player.maxHp, player.hp + (player.maxHp / 8));
+    player.hp = Math.min(player.maxHp, player.hp + (player.maxHp / 6));
     
     player.exp = 0;
     player.nextExp = Math.floor(player.nextExp * 1.5);
@@ -429,33 +438,67 @@ function levelUp() {
     screen.classList.remove('hidden');
 
     const s = player.skillStats;
-    let choices = [];
 
     if (player.level === 5) {
         document.getElementById('upgrade-title').innerText = "第 5 次進化：超級強化！";
-        choices.push({ ...s.specialUpgrade, isSpecialUI: true });
-    } else {
-        document.getElementById('upgrade-title').innerText = "技能強化！";
-        let available = [...s.upgrades].sort(() => 0.5 - Math.random());
-        choices = available.slice(0, 2);
-    }
-
-    choices.forEach(choice => {
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-upgrade ' + (choice.isSpecialUI ? 'btn-special' : '');
+        let choice = s.specialUpgrade;
+        let btn = document.createElement('button');
+        btn.className = 'btn btn-upgrade btn-special';
         btn.innerText = choice.desc;
         btn.onclick = () => {
             choice.apply(s);
-            screen.classList.add('hidden');
-            gameState = 'playing';
-            
-            if (player.level === 10) {
-                document.getElementById('status').innerText = "最終波！清空敵人以獲勝！";
-                document.getElementById('status').style.color = "#FFEB3B";
-            }
+            resumeGameAfterUpgrade();
         };
         optionsDiv.appendChild(btn);
-    });
+        
+    } else if (player.level === 10) {
+        document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(請點擊獲取所有能力)";
+        let choices = [...s.upgrades];
+        let clickedCount = 0;
+        
+        choices.forEach(choice => {
+            let btn = document.createElement('button');
+            btn.className = 'btn btn-upgrade btn-special';
+            btn.innerText = choice.desc;
+            btn.onclick = () => {
+                choice.apply(s);
+                btn.classList.add('hidden');
+                clickedCount++;
+                if (clickedCount === choices.length) {
+                    resumeGameAfterUpgrade(); 
+                }
+            };
+            optionsDiv.appendChild(btn);
+        });
+        
+    } else {
+        document.getElementById('upgrade-title').innerText = "技能強化！";
+        let available = [...s.upgrades].sort(() => 0.5 - Math.random());
+        let choices = available.slice(0, 2);
+        choices.forEach(choice => {
+            let btn = document.createElement('button');
+            btn.className = 'btn btn-upgrade';
+            btn.innerText = choice.desc;
+            btn.onclick = () => {
+                choice.apply(s);
+                resumeGameAfterUpgrade();
+            };
+            optionsDiv.appendChild(btn);
+        });
+    }
+}
+
+function resumeGameAfterUpgrade() {
+    document.getElementById('upgrade-screen').classList.add('hidden');
+    gameState = 'playing';
+    
+    if (player.level === 10) {
+        document.getElementById('status').innerText = "最終波！擊敗大魔王以獲勝！";
+        document.getElementById('status').style.color = "#FFEB3B";
+        
+        frameCount = 0; 
+        enemies.push(new Enemy(1 + player.level * 0.3, 'boss'));
+    }
 }
 
 function gameOver(isWin) {
@@ -543,11 +586,11 @@ function gameLoop() {
 
     if (!stopSpawning) {
         if (frameCount % spawnRate === 0) {
-            enemies.push(new Enemy(1 + player.level * 0.3, false));
+            enemies.push(new Enemy(1 + player.level * 0.3, 'normal'));
         }
         
         if (player.level >= 5 && frameCount % (spawnRate * 4) === 0) {
-            enemies.push(new Enemy(1 + player.level * 0.3, true));
+            enemies.push(new Enemy(1 + player.level * 0.3, 'mini'));
         }
     }
 
@@ -571,7 +614,10 @@ function gameLoop() {
         enemies[i].update();
         enemies[i].draw();
         if (enemies[i].hp <= 0) {
-            gems.push(new Gem(enemies[i].x, enemies[i].y));
+            let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
+            for (let g = 0; g < gemCount; g++) {
+                gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
+            }
             enemies.splice(i, 1);
         }
     }
