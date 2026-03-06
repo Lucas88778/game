@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.0 (硬核挑戰版)</title>
+<title>Roguelike 生存：極限試煉 v4.1 (視覺散佈優化版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -59,13 +59,13 @@ let gameState = 'start';
 let keys = {};
 let frameCount = 0;
 let normalKillCount = 0; 
+let confettis = []; 
 
 let enemies = [];
 let gems = [];
 let healDrops = []; 
 let projectiles = [];
 let effects = [];
-let confettis = []; // 【新增】彩帶陣列
 
 const player = {
     x: canvas.width / 2, y: canvas.height / 2,
@@ -84,31 +84,32 @@ const joystick = {
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 45, // 【下修】45幀
+        cooldown: 45, 
         currentCooldown: 0,
         count: 1, speed: 5, 
-        damage: 15, // 【下修】15點
+        damage: 15, 
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
-            { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
-            { id: 'u2', desc: '快速施法：大幅減少冷卻', apply: (s) => s.cooldown = Math.max(10, s.cooldown - 10) },
-            { id: 'u3', desc: '分裂魔彈：分裂小飛彈數量 +2', apply: (s) => s.splitCount += 2 }
+            { id: 'u1', desc: '魔法追蹤彈+1', apply: (s) => s.count += 1 },
+            { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = Math.max(10, s.cooldown - 10) },
+            { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 2 }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：虛空穿透 (皆可穿透一次敵人)', apply: (s) => s.isSpecial = true }
     },
     frost: {
         id: 'frost', name: '冰霜法環',
-        cooldown: 145, // 【下修】145幀
+        cooldown: 145, 
         currentCooldown: 0,
         radius: 80, duration: 40, 
-        damage: 1.28, // 【下修】0.8倍 (1.6 * 0.8)
+        damage: 1.28, 
+        frostCastCount: 0, 
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
-            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(60, s.cooldown - 10) }, // 【下修】每次-10幀
+            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(65, s.cooldown - 10) }, 
             { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } 
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (附加短暫凍結)', apply: (s) => s.isSpecial = true }
+        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (附加極短凍結)', apply: (s) => s.isSpecial = true }
     }
 };
 
@@ -159,34 +160,6 @@ function startGame(skillId) {
     requestAnimationFrame(gameLoop);
 }
 
-// 【新增】勝利彩帶類別
-class Confetti {
-    constructor() {
-        this.x = canvas.width / 2;
-        this.y = canvas.height / 2;
-        this.vx = (Math.random() - 0.5) * 20;
-        this.vy = (Math.random() - 0.5) * 20 - 10;
-        this.size = Math.random() * 10 + 5;
-        this.color = `hsl(${Math.random() * 360}, 100%, 60%)`;
-        this.angle = Math.random() * Math.PI * 2;
-        this.spin = (Math.random() - 0.5) * 0.2;
-    }
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vy += 0.3; // 重力
-        this.angle += this.spin;
-    }
-    draw() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-        ctx.fillStyle = this.color;
-        ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
-        ctx.restore();
-    }
-}
-
 class Enemy {
     constructor(hpMult, type = 'normal') {
         const angle = Math.random() * Math.PI * 2;
@@ -197,23 +170,21 @@ class Enemy {
         
         let baseSpeed = 1.5 + Math.random() * 1;
         
-        // 【更新】怪物血量膨脹計算
-        let hpScale = 1.2; // 基礎1.2倍
+        let hpScale = 1.2;
         if (player.level >= 5) {
-            // 第五關後慢慢遞增，至第九關增加1.5倍
-            let extra = 1.0 + Math.min(5, player.level - 4) * 0.1;
-            hpScale *= extra;
+            let progress = Math.min(4, player.level - 5) / 4; 
+            hpScale = 1.2 * (1 + 0.5 * progress); 
         }
 
         if (type === 'boss') {
             this.size = 35; 
             this.speed = baseSpeed; 
-            this.hp = 30 * hpMult * 20.0; // 【更新】大魔王血量兩倍 (原本10.0變20.0)
+            this.hp = 30 * hpMult * hpScale * 20.0; 
             this.emoji = '👻';
         } else if (type === 'mini') {
             this.size = 18;
             this.speed = baseSpeed * 0.6;
-            this.hp = 30 * hpMult * 2.0 * hpScale; 
+            this.hp = 30 * hpMult * hpScale * 2.0;
             this.emoji = '👹';
         } else {
             this.size = 12 + Math.random() * 5;
@@ -225,7 +196,6 @@ class Enemy {
         this.maxHp = this.hp;
         this.baseSpeed = this.speed; 
         this.frozenTimer = 0;
-        this.frostHitCount = 0; // 紀錄被冰環集中的次數
     }
     update() {
         if (this.frozenTimer > 0) {
@@ -404,7 +374,11 @@ class Projectile {
                 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
-                        let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
+                        // 【視覺優化】分裂小飛彈加上微幅座標偏移，避免重疊
+                        let offsetX = (Math.random() - 0.5) * 20;
+                        let offsetY = (Math.random() - 0.5) * 20;
+                        
+                        let splitProj = new Projectile(this.x + offsetX, this.y + offsetY, null, this.stats, true);
                         splitProj.hitEnemies.add(e); 
                         let spread = (j - (this.stats.splitCount - 1) / 2) * 0.4; 
                         splitProj.angle = this.angle + spread; 
@@ -445,7 +419,7 @@ class Projectile {
 }
 
 class FrostEffect {
-    constructor(x, y, stats) {
+    constructor(x, y, stats, castCount) {
         this.x = x; this.y = y;
         this.maxRadius = stats.radius;
         this.radius = 0;
@@ -453,7 +427,7 @@ class FrostEffect {
         this.maxDuration = stats.duration; 
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
-        this.frozenTargets = new Set(); // 記錄已經觸發過冰凍判定的怪物，確保每次施法只判定一次
+        this.castCount = castCount; 
     }
     update() {
         if (this.radius < this.maxRadius) this.radius += 8; 
@@ -469,21 +443,14 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                // 【更新】緩速削弱成 0.7 倍
                 e.speed = e.baseSpeed * 0.7; 
                 
-                // 處理冰凍判定
-                if (this.isSpecial && !this.frozenTargets.has(e)) {
-                    this.frozenTargets.add(e); // 標記為已判定
-                    
+                if (this.isSpecial) {
                     if (e.type === 'boss') {
-                        e.frostHitCount += 1;
-                        // 【更新】大魔王每三次攻擊(施法)才觸發冰凍，時間下修為 5 幀
-                        if (e.frostHitCount % 3 === 0) {
+                        if (this.castCount % 3 === 0) {
                             e.frozenTimer = 5;
                         }
                     } else {
-                        // 一般怪物與小魔王冰凍下修為 5 幀
                         e.frozenTimer = 5;
                     }
                 }
@@ -527,12 +494,16 @@ function fireSkill() {
         }
 
         for (let i = 0; i < s.count; i++) {
-            projectiles.push(new Projectile(player.x, player.y, initialTarget, s, false));
+            // 【視覺優化】主飛彈發射時加上微幅座標偏移，避免重疊
+            let offsetX = (Math.random() - 0.5) * 20;
+            let offsetY = (Math.random() - 0.5) * 20;
+            projectiles.push(new Projectile(player.x + offsetX, player.y + offsetY, initialTarget, s, false));
         }
         s.currentCooldown = s.cooldown;
         
     } else if (player.skill === 'frost') {
-        effects.push(new FrostEffect(player.x, player.y, s));
+        s.frostCastCount = (s.frostCastCount || 0) + 1;
+        effects.push(new FrostEffect(player.x, player.y, s, s.frostCastCount));
         s.currentCooldown = s.cooldown;
     }
 }
@@ -628,15 +599,39 @@ function gameOver(isWin) {
     document.getElementById('game-over-screen').classList.remove('hidden');
     document.getElementById('end-title').innerText = isWin ? "挑戰成功！你肅清了戰場！" : "挑戰失敗！";
     document.getElementById('end-title').style.color = isWin ? "#4CAF50" : "#F44336";
-    
-    // 【新增】如果勝利，觸發彩帶特效
-    if (isWin) {
+}
+
+function drawConfetti() {
+    if (confettis.length === 0) {
         for (let i = 0; i < 150; i++) {
-            confettis.push(new Confetti());
+            confettis.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * -canvas.height,
+                vx: (Math.random() - 0.5) * 4,
+                vy: Math.random() * 3 + 2,
+                size: Math.random() * 8 + 6,
+                color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+                angle: Math.random() * 360,
+                spin: (Math.random() - 0.5) * 10
+            });
         }
-        // 確保進入遊戲迴圈繪製彩帶
-        requestAnimationFrame(gameLoop);
     }
+    confettis.forEach(c => {
+        c.x += c.vx;
+        c.y += c.vy;
+        c.angle += c.spin;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle * Math.PI / 180);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 0.6);
+        ctx.restore();
+        
+        if (c.y > canvas.height) {
+            c.y = -10;
+            c.x = Math.random() * canvas.width;
+        }
+    });
 }
 
 function drawJoystick() {
@@ -671,22 +666,22 @@ function drawJoystick() {
 }
 
 function gameLoop() {
-    // 【處理結束後的彩帶特效渲染】
     if (gameState === 'gameover') {
-        if (confettis.length > 0) {
+        if (player.hp > 0) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // 繪製最後的玩家狀態
+            gems.forEach(g => g.draw());
+            healDrops.forEach(h => h.draw()); 
+            projectiles.forEach(p => p.draw());
+            effects.forEach(e => e.draw());
+            enemies.forEach(e => e.draw());
             ctx.font = '30px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('🧙', player.x, player.y);
-            // 繪製彩帶
-            confettis.forEach(c => {
-                c.update();
-                c.draw();
-            });
-            requestAnimationFrame(gameLoop);
+            
+            drawConfetti(); 
         }
+        requestAnimationFrame(gameLoop);
         return;
     }
 
@@ -803,7 +798,6 @@ function gameLoop() {
 
     if (player.level >= 10 && stopSpawning && enemies.length === 0) {
         gameOver(true);
-        return; // 進入遊戲結束與彩帶迴圈
     }
 
     requestAnimationFrame(gameLoop);
