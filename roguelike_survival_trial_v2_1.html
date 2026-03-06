@@ -1,9 +1,9 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.4 (精細微調版)</title>
+<title>Roguelike 生存：極限試煉 v4.6 (除錯與標記優化版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -87,7 +87,7 @@ const skillDefinitions = {
         cooldown: 45, 
         currentCooldown: 0,
         count: 1, speed: 5, 
-        damage: 20, 
+        damage: 15, 
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '魔法追蹤彈+1', apply: (s) => s.count += 1 },
@@ -98,7 +98,7 @@ const skillDefinitions = {
     },
     frost: {
         id: 'frost', name: '冰霜法環',
-        cooldown: 120, // 【更新】發動頻率改為 135 幀
+        cooldown: 120, 
         currentCooldown: 0,
         radius: 80, duration: 40, 
         damage: 1.2, 
@@ -234,7 +234,8 @@ class Enemy {
             ctx.font = `16px Arial`;
             ctx.textAlign = 'center';
             let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
-            ctx.fillText(mark, this.x, this.y - this.size - 25);
+            // 【修復】將 -25 改為 -8，讓標記緊貼魔王頭頂
+            ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
     }
 }
@@ -452,7 +453,6 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                // 【更新】移動速度保留 75% (即 25% 緩速)
                 e.speed = e.baseSpeed * 0.75; 
                 
                 if (this.isSpecial) {
@@ -462,11 +462,13 @@ class FrostEffect {
                             e.frostHitCount++;
                             
                             if (e.frostHitCount >= 3) {
-                                e.frozenTimer = 5;
+                                // 【修復】大魔王凍結時間補償，設為法環停留時間+5，使其與小怪被凍結的視覺時間完全一致
+                                e.frozenTimer = this.maxDuration + 5;
                                 e.frostHitCount = 0;
                             }
                         }
                     } else {
+                        // 小怪只要在法環內，每幀都會刷新5幀凍結，視覺上會凍結整個法環停留時間+5幀
                         e.frozenTimer = 5;
                     }
                 }
