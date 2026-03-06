@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.2</title>
+<title>Roguelike 生存：極限試煉 v2.3</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -71,7 +71,6 @@ const player = {
     skill: null, skillStats: {}
 };
 
-// 虛擬搖桿狀態
 const joystick = {
     active: false,
     startX: 0, startY: 0,
@@ -82,13 +81,13 @@ const joystick = {
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 50, currentCooldown: 0,
+        cooldown: 35, // 【優化】初始冷卻從 50 縮短至 35，大幅加快發射頻率
+        currentCooldown: 0,
         count: 1, speed: 5, damage: 18, 
-        turnSpeed: 2.0, // 【更新】轉向角度改為 2.0 度
-        size: 8, splitCount: 0, isSpecial: false,
+        turnSpeed: 2.0, size: 8, splitCount: 0, isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
-            { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(15, s.cooldown - 8) },
+            { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(12, s.cooldown - 6) },
             { id: 'u3', desc: '分裂魔彈：命中時分裂出小飛彈', apply: (s) => s.splitCount += 1 }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：虛空穿透 (皆可穿透一次敵人)', apply: (s) => s.isSpecial = true }
@@ -229,17 +228,15 @@ class Projectile {
         this.size = isSplit ? 5 : (stats.size || 8); 
         this.pierce = stats.isSpecial ? 2 : 1; 
         
-        // 【修復】確切套用技能設定裡的轉向速度
-        this.turnSpeedRad = stats.turnSpeed * (Math.PI / 180); 
+        // 【優化】主飛彈使用設定值(2度)，小飛彈強迫提升為3度，製造亂竄的感覺
+        this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
         
-        // 初始發射角度邏輯
         if (this.target) {
             this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
         } else {
             this.angle = -Math.PI / 2;
         }
         
-        // 如果是剛發射的主飛彈，給予一點隨機散射
         if (!isSplit) {
             this.angle += (Math.random() - 0.5) * 0.6;
         }
@@ -297,14 +294,13 @@ class Projectile {
                 e.hp -= this.damage;
                 this.hitEnemies.add(e);
                 
-                // 【更新】分裂飛彈順著原本的飛行方向噴射
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
                         let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
                         splitProj.hitEnemies.add(e); 
                         
-                        // 繼承原本的飛行角度 (this.angle)，若有多顆則微幅呈扇形散開
-                        let spread = (j - (this.stats.splitCount - 1) / 2) * 0.3; 
+                        // 讓小飛彈沿著原本的軌跡並帶有一點扇形散開
+                        let spread = (j - (this.stats.splitCount - 1) / 2) * 0.4; 
                         splitProj.angle = this.angle + spread; 
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
