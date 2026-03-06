@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v3.3 (續航力升級版)</title>
+<title>Roguelike 生存：極限試煉 v3.5 (冰環視覺升級版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -58,11 +58,11 @@ canvas.height = window.innerHeight;
 let gameState = 'start';
 let keys = {};
 let frameCount = 0;
-let normalKillCount = 0; // 【新增】記錄一般怪物擊殺數
+let normalKillCount = 0; 
 
 let enemies = [];
 let gems = [];
-let healDrops = []; // 【新增】補血塊陣列
+let healDrops = []; 
 let projectiles = [];
 let effects = [];
 
@@ -83,10 +83,9 @@ const joystick = {
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 40, 
+        cooldown: 30, // 【更新】初始冷卻調整為 30 幀
         currentCooldown: 0,
-        count: 1, speed: 5, 
-        damage: 25, // 【更新】基礎攻擊力提升為 25
+        count: 1, speed: 5, damage: 25, 
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
@@ -102,7 +101,7 @@ const skillDefinitions = {
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(40, s.cooldown - 20) },
-            { id: 'u3', desc: '延長滯留時間', apply: (s) => s.duration += 15 }
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } // 【更新】修改文字敘述
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (完全凍結敵人)', apply: (s) => s.isSpecial = true }
     }
@@ -144,8 +143,8 @@ function startGame(skillId) {
     player.x = canvas.width / 2;
     player.y = canvas.height / 2;
     player.hp = player.maxHp;
-    normalKillCount = 0; // 重置擊殺數
-    healDrops = []; // 重置補血塊
+    normalKillCount = 0; 
+    healDrops = []; 
     
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
@@ -191,11 +190,14 @@ class Enemy {
         }
         const dx = player.x - this.x;
         const dy = player.y - this.y;
-        const dist = Math.hypot(dx, dy);
+        const distSq = dx * dx + dy * dy; 
+        
+        const dist = Math.sqrt(distSq);
         this.x += (dx / dist) * this.speed;
         this.y += (dy / dist) * this.speed;
         
-        if (dist < player.size + this.size) {
+        const hitDist = player.size + this.size;
+        if (distSq < hitDist * hitDist) {
             player.hp -= 0.5;
             if (player.hp <= 0) gameOver(false);
         }
@@ -219,12 +221,17 @@ class Gem {
         this.x = x; this.y = y; this.size = 5;
     }
     update() {
-        const dist = Math.hypot(player.x - this.x, player.y - this.y);
-        if (dist < 80) {
-            this.x += (player.x - this.x) * 0.1;
-            this.y += (player.y - this.y) * 0.1;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy; 
+
+        if (distSq < 6400) { 
+            this.x += dx * 0.1;
+            this.y += dy * 0.1;
         }
-        if (dist < player.size + this.size) {
+        
+        const hitDist = player.size + this.size;
+        if (distSq < hitDist * hitDist) {
             player.exp++;
             updateUI();
             if (player.exp >= player.nextExp && player.level < 10) levelUp();
@@ -238,27 +245,29 @@ class Gem {
     }
 }
 
-// 【新增】補血塊類別
 class HealDrop {
     constructor(x, y) {
         this.x = x; this.y = y; this.size = 5;
     }
     update() {
-        const dist = Math.hypot(player.x - this.x, player.y - this.y);
-        if (dist < 80) {
-            // 磁吸效果與經驗寶石相同
-            this.x += (player.x - this.x) * 0.1;
-            this.y += (player.y - this.y) * 0.1;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < 6400) {
+            this.x += dx * 0.1;
+            this.y += dy * 0.1;
         }
-        if (dist < player.size + this.size) {
-            // 吃到補血塊，恢復 20 點生命值（不超過上限）
+        
+        const hitDist = player.size + this.size;
+        if (distSq < hitDist * hitDist) {
             player.hp = Math.min(player.maxHp, player.hp + 20);
-            return false; // 標記為刪除
+            return false; 
         }
         return true;
     }
     draw() {
-        ctx.fillStyle = '#FF5252'; // 紅色圓圈
+        ctx.fillStyle = '#FF5252'; 
         ctx.beginPath(); 
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); 
         ctx.fill();
@@ -301,14 +310,17 @@ class Projectile {
         }
 
         if (!this.target || this.target.hp <= 0) {
-            let closest = null; let minDist = Infinity;
-            enemies.forEach(e => {
-                if (e.hp <= 0) return; 
-                if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) return;
-                if (this.hitEnemies.has(e)) return; 
-                const d = Math.hypot(e.x - this.x, e.y - this.y);
-                if (d < minDist) { minDist = d; closest = e; }
-            });
+            let closest = null; let minDistSq = Infinity;
+            for (let i = 0; i < enemies.length; i++) {
+                let e = enemies[i];
+                if (e.hp <= 0 || this.hitEnemies.has(e)) continue;
+                if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
+                
+                const dx = e.x - this.x;
+                const dy = e.y - this.y;
+                const dSq = dx * dx + dy * dy; 
+                if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
+            }
             this.target = closest;
         }
 
@@ -334,13 +346,14 @@ class Projectile {
         
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
+            if (e.hp <= 0 || this.hitEnemies.has(e)) continue;
             
-            if (e.hp <= 0) continue; 
-            if (this.hitEnemies.has(e)) continue;
+            const dx = e.x - this.x;
+            const dy = e.y - this.y;
+            const distSq = dx * dx + dy * dy; 
+            const hitDist = e.size + this.size;
             
-            const dist = Math.hypot(e.x - this.x, e.y - this.y);
-            
-            if (dist < e.size + this.size) {
+            if (distSq < hitDist * hitDist) {
                 let actualDamage = (e.type === 'boss') ? this.damage * 0.8 : this.damage;
                 e.hp -= actualDamage;
                 this.hitEnemies.add(e);
@@ -349,12 +362,10 @@ class Projectile {
                     for (let j = 0; j < this.stats.splitCount; j++) {
                         let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
                         splitProj.hitEnemies.add(e); 
-                        
                         let spread = (j - (this.stats.splitCount - 1) / 2) * 0.4; 
                         splitProj.angle = this.angle + spread; 
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
-                        
                         projectiles.push(splitProj);
                     }
                 }
@@ -368,11 +379,11 @@ class Projectile {
     }
     
     draw() {
-        ctx.save(); 
-        
         if (this.isSpecial) {
-            ctx.shadowBlur = 20; 
-            ctx.shadowColor = this.isSplit ? 'orange' : 'orangered';
+            ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 2.5, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         if (!this.isSplit) {
@@ -386,8 +397,6 @@ class Projectile {
             ctx.textBaseline = 'middle';
             ctx.fillText('✨', this.x, this.y);
         }
-        
-        ctx.restore(); 
     }
 }
 
@@ -397,6 +406,7 @@ class FrostEffect {
         this.maxRadius = stats.radius;
         this.radius = 0;
         this.duration = stats.duration;
+        this.maxDuration = stats.duration; // 【新增】紀錄最大時間用來計算淡出
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
     }
@@ -404,22 +414,42 @@ class FrostEffect {
         if (this.radius < this.maxRadius) this.radius += 8; 
         this.duration--;
         
-        enemies.forEach(e => {
-            if (e.hp <= 0) return; 
-            if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0) continue; 
+            
+            const dx = e.x - this.x;
+            const dy = e.y - this.y;
+            const distSq = dx * dx + dy * dy; 
+            
+            if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
                 e.speed = 0.5;
                 if (this.isSpecial) {
                     e.frozenTimer = (e.type === 'boss') ? 30 : 60;
                 }
             }
-        });
+        }
         return this.duration > 0;
     }
     draw() {
-        ctx.strokeStyle = `rgba(150, 200, 255, ${this.duration / 40})`;
+        ctx.save();
+        // 【更新】讓整體冰環與 ❄️ 符號一起平滑淡出
+        ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration);
+        
+        ctx.strokeStyle = 'rgb(150, 200, 255)';
         ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); 
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); 
+        ctx.stroke();
+
+        // 【新增】跟著冰環放大的 ❄️ 符號
+        ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('❄️', this.x, this.y);
+        
+        ctx.restore();
     }
 }
 
@@ -429,13 +459,15 @@ function fireSkill() {
     
     if (player.skill === 'missile') {
         let initialTarget = null;
-        let minDist = Infinity;
-        enemies.forEach(e => {
-            if (e.hp <= 0) return; 
-            if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) return;
-            const d = Math.hypot(e.x - player.x, e.y - player.y);
-            if (d < minDist) { minDist = d; initialTarget = e; }
-        });
+        let minDistSq = Infinity;
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
+            const dx = e.x - player.x;
+            const dy = e.y - player.y;
+            const dSq = dx * dx + dy * dy; 
+            if (dSq < minDistSq) { minDistSq = dSq; initialTarget = e; }
+        }
 
         for (let i = 0; i < s.count; i++) {
             projectiles.push(new Projectile(player.x, player.y, initialTarget, s, false));
@@ -626,11 +658,13 @@ function gameLoop() {
         }
     }
 
+    if (gems.length > 200) gems.shift();
+    if (healDrops.length > 50) healDrops.shift();
+
     for (let i = gems.length - 1; i >= 0; i--) {
         if (!gems[i].update()) gems.splice(i, 1);
     }
     
-    // 【新增】更新與繪製補血塊
     for (let i = healDrops.length - 1; i >= 0; i--) {
         if (!healDrops[i].update()) healDrops.splice(i, 1);
     }
@@ -644,7 +678,7 @@ function gameLoop() {
     }
 
     gems.forEach(g => g.draw());
-    healDrops.forEach(h => h.draw()); // 繪製補血塊
+    healDrops.forEach(h => h.draw()); 
     projectiles.forEach(p => p.draw());
     effects.forEach(e => e.draw());
 
@@ -657,12 +691,11 @@ function gameLoop() {
                 gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
             }
             
-            // 【新增】一般怪物擊殺計數與補血塊掉落邏輯
             if (enemies[i].type === 'normal') {
                 normalKillCount++;
                 if (normalKillCount >= 10) {
                     healDrops.push(new HealDrop(enemies[i].x, enemies[i].y));
-                    normalKillCount = 0; // 重置計數器
+                    normalKillCount = 0; 
                 }
             }
 
