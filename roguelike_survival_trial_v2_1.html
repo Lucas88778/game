@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.1</title>
+<title>Roguelike 生存：極限試煉 v2.2</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -84,7 +84,7 @@ const skillDefinitions = {
         id: 'missile', name: '魔法追蹤彈',
         cooldown: 50, currentCooldown: 0,
         count: 1, speed: 5, damage: 18, 
-        turnSpeed: 1.0, // 更新：主飛彈與小飛彈統一改為每幀 1 度
+        turnSpeed: 2.0, // 【更新】轉向角度改為 2.0 度
         size: 8, splitCount: 0, isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
@@ -138,10 +138,10 @@ function startGame(skillId) {
     player.skillStats = JSON.parse(JSON.stringify(skillDefinitions[skillId]));
     player.skillStats.upgrades = skillDefinitions[skillId].upgrades;
     player.skillStats.specialUpgrade = skillDefinitions[skillId].specialUpgrade;
-
+    
     player.x = canvas.width / 2;
     player.y = canvas.height / 2;
-
+    
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
@@ -171,7 +171,7 @@ class Enemy {
         const dist = Math.hypot(dx, dy);
         this.x += (dx / dist) * this.speed;
         this.y += (dy / dist) * this.speed;
-
+        
         if (dist < player.size + this.size) {
             player.hp -= 0.5;
             if (player.hp <= 0) gameOver(false);
@@ -224,24 +224,30 @@ class Projectile {
         this.isSpecial = stats.isSpecial;
         this.hitEnemies = new Set();
         this.isSplit = isSplit;
-
+        
         this.damage = isSplit ? stats.damage * 0.25 : stats.damage;
         this.size = isSplit ? 5 : (stats.size || 8); 
         this.pierce = stats.isSpecial ? 2 : 1; 
-        this.turnSpeedRad = 1.0 * (Math.PI / 180); 
-
+        
+        // 【修復】確切套用技能設定裡的轉向速度
+        this.turnSpeedRad = stats.turnSpeed * (Math.PI / 180); 
+        
+        // 初始發射角度邏輯
         if (this.target) {
             this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
         } else {
             this.angle = -Math.PI / 2;
         }
-
-        this.angle += (Math.random() - 0.5) * 0.6;
-
+        
+        // 如果是剛發射的主飛彈，給予一點隨機散射
+        if (!isSplit) {
+            this.angle += (Math.random() - 0.5) * 0.6;
+        }
+        
         this.vx = Math.cos(this.angle) * this.speed;
         this.vy = Math.sin(this.angle) * this.speed;
     }
-
+    
     update() {
         if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) {
             return false;
@@ -263,51 +269,58 @@ class Projectile {
             const dx = this.target.x - this.x;
             const dy = this.target.y - this.y;
             const targetAngle = Math.atan2(dy, dx);
-
+            
             let angleDiff = targetAngle - this.angle;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
             while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
+            
             if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad;
             else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
-
+            
             this.angle += angleDiff;
             this.vx = Math.cos(this.angle) * this.speed;
             this.vy = Math.sin(this.angle) * this.speed;
         } 
-
+        
         this.x += this.vx;
         this.y += this.vy;
-
+        
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
+            
             if (e.hp <= 0) continue; 
             if (this.hitEnemies.has(e)) continue;
-
+            
             const dist = Math.hypot(e.x - this.x, e.y - this.y);
+            
             if (dist < e.size + this.size) {
                 e.hp -= this.damage;
                 this.hitEnemies.add(e);
-
+                
+                // 【更新】分裂飛彈順著原本的飛行方向噴射
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
                         let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
                         splitProj.hitEnemies.add(e); 
-                        splitProj.angle = Math.random() * Math.PI * 2;
+                        
+                        // 繼承原本的飛行角度 (this.angle)，若有多顆則微幅呈扇形散開
+                        let spread = (j - (this.stats.splitCount - 1) / 2) * 0.3; 
+                        splitProj.angle = this.angle + spread; 
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
+                        
                         projectiles.push(splitProj);
                     }
                 }
-
+                
                 this.pierce--;
-                if (this.pierce <= 0) return false;
+                if (this.pierce <= 0) return false; 
             }
         }
-
+        
         return true;
     }
-
+    
     draw() {
         ctx.fillStyle = this.isSpecial ? '#E040FB' : (this.isSplit ? '#29B6F6' : '#00BCD4');
         ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
@@ -326,7 +339,7 @@ class FrostEffect {
     update() {
         if (this.radius < this.maxRadius) this.radius += 8; 
         this.duration--;
-
+        
         enemies.forEach(e => {
             if (e.hp <= 0) return; 
             if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
@@ -347,7 +360,7 @@ class FrostEffect {
 function fireSkill() {
     const s = player.skillStats;
     if (s.currentCooldown > 0) { s.currentCooldown--; return; }
-
+    
     if (player.skill === 'missile') {
         let initialTarget = null;
         let minDist = Infinity;
@@ -362,7 +375,7 @@ function fireSkill() {
             projectiles.push(new Projectile(player.x, player.y, initialTarget, s, false));
         }
         s.currentCooldown = s.cooldown;
-
+        
     } else if (player.skill === 'frost') {
         effects.push(new FrostEffect(player.x, player.y, s));
         s.currentCooldown = s.cooldown;
@@ -381,7 +394,7 @@ function levelUp() {
     player.exp = 0;
     player.nextExp = Math.floor(player.nextExp * 1.5);
     updateUI();
-
+    
     const screen = document.getElementById('upgrade-screen');
     const optionsDiv = document.getElementById('upgrade-options');
     optionsDiv.innerHTML = '';
@@ -407,7 +420,7 @@ function levelUp() {
             choice.apply(s);
             screen.classList.add('hidden');
             gameState = 'playing';
-
+            
             if (player.level === 10) {
                 document.getElementById('status').innerText = "最終波！清空敵人以獲勝！";
                 document.getElementById('status').style.color = "#FFEB3B";
@@ -427,10 +440,10 @@ function gameOver(isWin) {
 
 function drawJoystick() {
     if (!joystick.active) return;
-
+    
     ctx.save();
     ctx.globalAlpha = 0.5;
-
+    
     ctx.beginPath();
     ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
     ctx.fillStyle = '#555';
@@ -442,7 +455,7 @@ function drawJoystick() {
     let dx = joystick.currentX - joystick.startX;
     let dy = joystick.currentY - joystick.startY;
     const dist = Math.hypot(dx, dy);
-
+    
     if (dist > joystick.maxRadius) {
         dx = (dx / dist) * joystick.maxRadius;
         dy = (dy / dist) * joystick.maxRadius;
@@ -452,7 +465,7 @@ function drawJoystick() {
     ctx.arc(joystick.startX + dx, joystick.startY + dy, 20, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
     ctx.fill();
-
+    
     ctx.restore();
 }
 
@@ -486,7 +499,7 @@ function gameLoop() {
         const dist = Math.hypot(moveX, moveY);
         const nx = (moveX / dist) * player.speed;
         const ny = (moveY / dist) * player.speed;
-
+        
         if (player.x + nx > player.size && player.x + nx < canvas.width - player.size) player.x += nx;
         if (player.y + ny > player.size && player.y + ny < canvas.height - player.size) player.y += ny;
     }
@@ -496,7 +509,7 @@ function gameLoop() {
     frameCount++;
     let spawnRate = Math.max(20, 100 - player.level * 8);
     if (player.level >= 10) spawnRate = 10;
-
+    
     let stopSpawning = player.level >= 10 && frameCount > 1200;
 
     if (!stopSpawning && frameCount % spawnRate === 0) {
@@ -506,11 +519,11 @@ function gameLoop() {
     for (let i = gems.length - 1; i >= 0; i--) {
         if (!gems[i].update()) gems.splice(i, 1);
     }
-
+    
     for (let i = projectiles.length - 1; i >= 0; i--) {
         if (!projectiles[i].update()) projectiles.splice(i, 1);
     }
-
+    
     for (let i = effects.length - 1; i >= 0; i--) {
         if (!effects[i].update()) effects.splice(i, 1);
     }
@@ -532,7 +545,7 @@ function gameLoop() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🧙', player.x, player.y);
-
+    
     ctx.fillStyle = '#F44336';
     ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
     ctx.fillStyle = '#4CAF50';
