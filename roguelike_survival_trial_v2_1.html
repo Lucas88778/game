@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.4</title>
+<title>Roguelike 生存：極限試煉 v2.5</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -84,7 +84,7 @@ const skillDefinitions = {
         cooldown: 35, 
         currentCooldown: 0,
         count: 1, speed: 5, damage: 18, 
-        turnSpeed: 2.0, size: 8, splitCount: 0, isSpecial: false,
+        turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, // 主飛彈碰撞半徑加到 12 避免幽靈穿透
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(12, s.cooldown - 6) },
@@ -224,9 +224,9 @@ class Projectile {
         this.hitEnemies = new Set();
         this.isSplit = isSplit;
         
-        // 【更新】分裂小飛彈攻擊力改成原本導彈的 40% (原本是 25%)
         this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
-        this.size = isSplit ? 5 : (stats.size || 8); 
+        this.size = isSplit ? 5 : (stats.size || 12); 
+        this.pierce = stats.isSpecial ? 2 : 1; 
         
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
         
@@ -316,9 +316,17 @@ class Projectile {
     }
     
     draw() {
-        // 【更新】分裂小飛彈改成白色 (#FFFFFF)
-        ctx.fillStyle = this.isSpecial ? '#E040FB' : (this.isSplit ? '#FFFFFF' : '#00BCD4');
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+        if (!this.isSplit) {
+            // 主飛彈：使用 ✨ 符號
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('✨', this.x, this.y);
+        } else {
+            // 分裂小飛彈：維持純白色圓形 (虛空穿透特效保留紫色)
+            ctx.fillStyle = this.isSpecial ? '#E040FB' : '#FFFFFF';
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+        }
     }
 }
 
