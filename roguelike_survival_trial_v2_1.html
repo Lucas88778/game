@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.2 (魔力爆發版)</title>
+<title>Roguelike 生存：極限試煉 v4.3 (視覺標記優化版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -87,14 +87,13 @@ const skillDefinitions = {
         cooldown: 45, 
         currentCooldown: 0,
         count: 1, speed: 5, 
-        damage: 20, // 【更新】單發攻擊力改為 20
+        damage: 15, // 【更新】單發攻擊力回調至 15
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '魔法追蹤彈+1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = Math.max(10, s.cooldown - 10) },
             { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 2 }
         ],
-        // 【更新】重製為魔力爆發 (攻擊力提升2.5倍)，保留發光視覺特效
         specialUpgrade: { id: 's1', desc: '超級強化：魔力爆發 (攻擊力提升2.5倍)', apply: (s) => { s.damage *= 2.5; s.isSpecial = true; } }
     },
     frost: {
@@ -102,8 +101,7 @@ const skillDefinitions = {
         cooldown: 145, 
         currentCooldown: 0,
         radius: 80, duration: 40, 
-        damage: 1.2, // 【更新】傷害改為 1.2
-        frostCastCount: 0, 
+        damage: 1.2, 
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
@@ -180,7 +178,6 @@ class Enemy {
         if (type === 'boss') {
             this.size = 35; 
             this.speed = baseSpeed; 
-            // 【更新】大魔王血量減半 (20.0 -> 10.0 倍係數)
             this.hp = 30 * hpMult * hpScale * 10.0; 
             this.emoji = '👻';
         } else if (type === 'mini') {
@@ -198,6 +195,9 @@ class Enemy {
         this.maxHp = this.hp;
         this.baseSpeed = this.speed; 
         this.frozenTimer = 0;
+        
+        // 【新增】紀錄受到五級冰霜法環的次數 (主要給大魔王使用)
+        this.frostHitCount = 0;
     }
     update() {
         if (this.frozenTimer > 0) {
@@ -229,6 +229,15 @@ class Enemy {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.emoji, this.x, this.y); 
+
+        // 【新增】大魔王專屬：繪製頭頂的冰凍抗性標記
+        if (this.type === 'boss' && this.frostHitCount > 0) {
+            ctx.font = `16px Arial`;
+            ctx.textAlign = 'center';
+            let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
+            // 標記顯示在魔王頭頂稍微偏上的位置
+            ctx.fillText(mark, this.x, this.y - this.size - 25);
+        }
     }
 }
 
@@ -302,7 +311,6 @@ class Projectile {
         
         this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
         this.size = isSplit ? 3.5 : (stats.size || 12); 
-        // 【更新】移除了原本 5 級加穿透的設定，統一改為單體打擊爆發
         this.pierce = 1; 
         
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
@@ -421,7 +429,7 @@ class Projectile {
 }
 
 class FrostEffect {
-    constructor(x, y, stats, castCount) {
+    constructor(x, y, stats) {
         this.x = x; this.y = y;
         this.maxRadius = stats.radius;
         this.radius = 0;
@@ -429,7 +437,8 @@ class FrostEffect {
         this.maxDuration = stats.duration; 
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
-        this.castCount = castCount; 
+        // 【新增】紀錄這個法環「已經命中過哪些魔王」，避免每一幀重複計算冰凍疊加
+        this.hitBossesThisCast = new Set();
     }
     update() {
         if (this.radius < this.maxRadius) this.radius += 8; 
@@ -445,15 +454,23 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                // 【更新】緩速效果改為保留 80% 速度 (20% 緩速)
                 e.speed = e.baseSpeed * 0.8; 
                 
                 if (this.isSpecial) {
                     if (e.type === 'boss') {
-                        if (this.castCount % 3 === 0) {
-                            e.frozenTimer = 5;
+                        // 【更新】如果這個冰環是第一次掃到該魔王，才增加其冰凍計數
+                        if (!this.hitBossesThisCast.has(e)) {
+                            this.hitBossesThisCast.add(e);
+                            e.frostHitCount++;
+                            
+                            // 累積到第 3 下，觸發冰凍並清除標記
+                            if (e.frostHitCount >= 3) {
+                                e.frozenTimer = 5;
+                                e.frostHitCount = 0;
+                            }
                         }
                     } else {
+                        // 一般怪物與小魔王依然每次掃到都微僵直
                         e.frozenTimer = 5;
                     }
                 }
@@ -497,7 +514,6 @@ function fireSkill() {
         }
 
         for (let i = 0; i < s.count; i++) {
-            // 【更新】主飛彈發射時的亂數座標範圍增加，從 20 擴大為 50，讓星星明顯散開
             let offsetX = (Math.random() - 0.5) * 50;
             let offsetY = (Math.random() - 0.5) * 50;
             projectiles.push(new Projectile(player.x + offsetX, player.y + offsetY, initialTarget, s, false));
@@ -505,8 +521,7 @@ function fireSkill() {
         s.currentCooldown = s.cooldown;
         
     } else if (player.skill === 'frost') {
-        s.frostCastCount = (s.frostCastCount || 0) + 1;
-        effects.push(new FrostEffect(player.x, player.y, s, s.frostCastCount));
+        effects.push(new FrostEffect(player.x, player.y, s));
         s.currentCooldown = s.cooldown;
     }
 }
