@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v3.5 (冰環視覺升級版)</title>
+<title>Roguelike 生存：極限試煉 v3.7 (光暈精緻版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -83,7 +83,7 @@ const joystick = {
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 30, // 【更新】初始冷卻調整為 30 幀
+        cooldown: 30, 
         currentCooldown: 0,
         count: 1, speed: 5, damage: 25, 
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
@@ -101,7 +101,7 @@ const skillDefinitions = {
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(40, s.cooldown - 20) },
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } // 【更新】修改文字敘述
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 15 } 
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (完全凍結敵人)', apply: (s) => s.isSpecial = true }
     }
@@ -165,7 +165,7 @@ class Enemy {
 
         if (type === 'boss') {
             this.size = 35; 
-            this.speed = baseSpeed * 0.8; 
+            this.speed = baseSpeed; 
             this.hp = 30 * hpMult * 10.0; 
             this.emoji = '👻';
         } else if (type === 'mini') {
@@ -354,7 +354,7 @@ class Projectile {
             const hitDist = e.size + this.size;
             
             if (distSq < hitDist * hitDist) {
-                let actualDamage = (e.type === 'boss') ? this.damage * 0.8 : this.damage;
+                let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
                 e.hp -= actualDamage;
                 this.hitEnemies.add(e);
                 
@@ -382,7 +382,8 @@ class Projectile {
         if (this.isSpecial) {
             ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 2.5, 0, Math.PI * 2);
+            // 【更新】將光暈的擴張範圍縮小，從原本的 2.5 倍改為 1.6 倍
+            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -406,7 +407,7 @@ class FrostEffect {
         this.maxRadius = stats.radius;
         this.radius = 0;
         this.duration = stats.duration;
-        this.maxDuration = stats.duration; // 【新增】紀錄最大時間用來計算淡出
+        this.maxDuration = stats.duration; 
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
     }
@@ -426,7 +427,7 @@ class FrostEffect {
                 e.hp -= this.damage;
                 e.speed = 0.5;
                 if (this.isSpecial) {
-                    e.frozenTimer = (e.type === 'boss') ? 30 : 60;
+                    e.frozenTimer = (e.type === 'boss') ? 10 : 60;
                 }
             }
         }
@@ -434,7 +435,6 @@ class FrostEffect {
     }
     draw() {
         ctx.save();
-        // 【更新】讓整體冰環與 ❄️ 符號一起平滑淡出
         ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration);
         
         ctx.strokeStyle = 'rgb(150, 200, 255)';
@@ -443,7 +443,6 @@ class FrostEffect {
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); 
         ctx.stroke();
 
-        // 【新增】跟著冰環放大的 ❄️ 符號
         ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -685,7 +684,12 @@ function gameLoop() {
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update();
         enemies[i].draw();
+        
         if (enemies[i].hp <= 0) {
+            if (enemies[i].type === 'boss') {
+                gameOver(true);
+            }
+            
             let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
             for (let g = 0; g < gemCount; g++) {
                 gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
@@ -714,10 +718,6 @@ function gameLoop() {
     ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
 
     drawJoystick();
-
-    if (player.level >= 10 && stopSpawning && enemies.length === 0) {
-        gameOver(true);
-    }
 
     requestAnimationFrame(gameLoop);
 }
