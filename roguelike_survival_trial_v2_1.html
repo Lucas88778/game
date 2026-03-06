@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.3</title>
+<title>Roguelike 生存：極限試煉 v2.4</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -81,7 +81,7 @@ const joystick = {
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 35, // 【優化】初始冷卻從 50 縮短至 35，大幅加快發射頻率
+        cooldown: 35, 
         currentCooldown: 0,
         count: 1, speed: 5, damage: 18, 
         turnSpeed: 2.0, size: 8, splitCount: 0, isSpecial: false,
@@ -224,11 +224,10 @@ class Projectile {
         this.hitEnemies = new Set();
         this.isSplit = isSplit;
         
-        this.damage = isSplit ? stats.damage * 0.25 : stats.damage;
+        // 【更新】分裂小飛彈攻擊力改成原本導彈的 40% (原本是 25%)
+        this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
         this.size = isSplit ? 5 : (stats.size || 8); 
-        this.pierce = stats.isSpecial ? 2 : 1; 
         
-        // 【優化】主飛彈使用設定值(2度)，小飛彈強迫提升為3度，製造亂竄的感覺
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
         
         if (this.target) {
@@ -299,7 +298,6 @@ class Projectile {
                         let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
                         splitProj.hitEnemies.add(e); 
                         
-                        // 讓小飛彈沿著原本的軌跡並帶有一點扇形散開
                         let spread = (j - (this.stats.splitCount - 1) / 2) * 0.4; 
                         splitProj.angle = this.angle + spread; 
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
@@ -318,7 +316,8 @@ class Projectile {
     }
     
     draw() {
-        ctx.fillStyle = this.isSpecial ? '#E040FB' : (this.isSplit ? '#29B6F6' : '#00BCD4');
+        // 【更新】分裂小飛彈改成白色 (#FFFFFF)
+        ctx.fillStyle = this.isSpecial ? '#E040FB' : (this.isSplit ? '#FFFFFF' : '#00BCD4');
         ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
     }
 }
