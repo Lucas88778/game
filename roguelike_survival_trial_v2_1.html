@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v2.5</title>
+<title>Roguelike 生存：極限試煉 v2.6</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -84,7 +84,7 @@ const skillDefinitions = {
         cooldown: 35, 
         currentCooldown: 0,
         count: 1, speed: 5, damage: 18, 
-        turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, // 主飛彈碰撞半徑加到 12 避免幽靈穿透
+        turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(12, s.cooldown - 6) },
@@ -225,7 +225,10 @@ class Projectile {
         this.isSplit = isSplit;
         
         this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
-        this.size = isSplit ? 5 : (stats.size || 12); 
+        
+        // 【優化】實體碰撞半徑調整：主飛彈維持 ✨ 的大範圍(12)，⭐️ 小飛彈縮小為精緻的 3.5
+        this.size = isSplit ? 3.5 : (stats.size || 12); 
+        
         this.pierce = stats.isSpecial ? 2 : 1; 
         
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
@@ -289,6 +292,7 @@ class Projectile {
             
             const dist = Math.hypot(e.x - this.x, e.y - this.y);
             
+            // 系統會自動根據 this.size 進行精準的打擊判斷
             if (dist < e.size + this.size) {
                 e.hp -= this.damage;
                 this.hitEnemies.add(e);
@@ -323,9 +327,13 @@ class Projectile {
             ctx.textBaseline = 'middle';
             ctx.fillText('✨', this.x, this.y);
         } else {
-            // 分裂小飛彈：維持純白色圓形 (虛空穿透特效保留紫色)
+            // 【修復】分裂小飛彈改成 ⭐️，字體稍稍縮小以匹配實體半徑
+            // 如果是虛空穿透(isSpecial)，顏色會自動變成紫色
             ctx.fillStyle = this.isSpecial ? '#E040FB' : '#FFFFFF';
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            ctx.font = '16px Arial'; 
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('⭐️', this.x, this.y);
         }
     }
 }
