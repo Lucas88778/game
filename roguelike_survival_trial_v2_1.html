@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.1 (視覺散佈優化版)</title>
+<title>Roguelike 生存：極限試煉 v4.2 (魔力爆發版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -87,21 +87,22 @@ const skillDefinitions = {
         cooldown: 45, 
         currentCooldown: 0,
         count: 1, speed: 5, 
-        damage: 15, 
+        damage: 20, // 【更新】單發攻擊力改為 20
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '魔法追蹤彈+1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = Math.max(10, s.cooldown - 10) },
             { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 2 }
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：虛空穿透 (皆可穿透一次敵人)', apply: (s) => s.isSpecial = true }
+        // 【更新】重製為魔力爆發 (攻擊力提升2.5倍)，保留發光視覺特效
+        specialUpgrade: { id: 's1', desc: '超級強化：魔力爆發 (攻擊力提升2.5倍)', apply: (s) => { s.damage *= 2.5; s.isSpecial = true; } }
     },
     frost: {
         id: 'frost', name: '冰霜法環',
         cooldown: 145, 
         currentCooldown: 0,
         radius: 80, duration: 40, 
-        damage: 1.28, 
+        damage: 1.2, // 【更新】傷害改為 1.2
         frostCastCount: 0, 
         isSpecial: false,
         upgrades: [
@@ -179,7 +180,8 @@ class Enemy {
         if (type === 'boss') {
             this.size = 35; 
             this.speed = baseSpeed; 
-            this.hp = 30 * hpMult * hpScale * 20.0; 
+            // 【更新】大魔王血量減半 (20.0 -> 10.0 倍係數)
+            this.hp = 30 * hpMult * hpScale * 10.0; 
             this.emoji = '👻';
         } else if (type === 'mini') {
             this.size = 18;
@@ -300,7 +302,8 @@ class Projectile {
         
         this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
         this.size = isSplit ? 3.5 : (stats.size || 12); 
-        this.pierce = stats.isSpecial ? 2 : 1; 
+        // 【更新】移除了原本 5 級加穿透的設定，統一改為單體打擊爆發
+        this.pierce = 1; 
         
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
         
@@ -374,7 +377,6 @@ class Projectile {
                 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
-                        // 【視覺優化】分裂小飛彈加上微幅座標偏移，避免重疊
                         let offsetX = (Math.random() - 0.5) * 20;
                         let offsetY = (Math.random() - 0.5) * 20;
                         
@@ -443,7 +445,8 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                e.speed = e.baseSpeed * 0.7; 
+                // 【更新】緩速效果改為保留 80% 速度 (20% 緩速)
+                e.speed = e.baseSpeed * 0.8; 
                 
                 if (this.isSpecial) {
                     if (e.type === 'boss') {
@@ -494,9 +497,9 @@ function fireSkill() {
         }
 
         for (let i = 0; i < s.count; i++) {
-            // 【視覺優化】主飛彈發射時加上微幅座標偏移，避免重疊
-            let offsetX = (Math.random() - 0.5) * 20;
-            let offsetY = (Math.random() - 0.5) * 20;
+            // 【更新】主飛彈發射時的亂數座標範圍增加，從 20 擴大為 50，讓星星明顯散開
+            let offsetX = (Math.random() - 0.5) * 50;
+            let offsetY = (Math.random() - 0.5) * 50;
             projectiles.push(new Projectile(player.x + offsetX, player.y + offsetY, initialTarget, s, false));
         }
         s.currentCooldown = s.cooldown;
