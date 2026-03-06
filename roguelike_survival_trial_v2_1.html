@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Roguelike 生存：極限試煉 v2.1</title>
+<style>
+    body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
+    canvas { display: block; }
+    #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 10px; border: 2px solid #555; text-align: center; pointer-events: auto; width: 80%; max-width: 400px; box-sizing: border-box; }
+    .btn { display: inline-block; background: #4CAF50; color: white; padding: 10px 20px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background 0.3s; }
+    .btn:hover { background: #45a049; }
+    .btn-upgrade { background: #2196F3; width: 100%; margin: 10px 0; display: block; }
+    .btn-upgrade:hover { background: #1976D2; }
+    .btn-special { background: #ff9800; font-weight: bold; text-shadow: 1px 1px 2px black; }
+    .btn-special:hover { background: #e68a00; }
+    #exp-bar-container { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 80%; height: 20px; background: #333; border-radius: 10px; border: 2px solid #777; }
+    #exp-bar { height: 100%; width: 0%; background: #4CAF50; border-radius: 8px; transition: width 0.2s; }
+    #status { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); font-size: 18px; text-shadow: 1px 1px 2px black; }
+    .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-layer">
+    <div id="exp-bar-container" class="hidden">
+        <div id="exp-bar"></div>
+    </div>
+    <div id="status" class="hidden">等級: 0 / 10</div>
+
+    <div id="start-screen" class="panel">
+        <h2>Roguelike 生存試煉</h2>
+        <p>請選擇你的初始技能：</p>
+        <button class="btn" onclick="startGame('missile')">魔法追蹤彈</button>
+        <button class="btn" onclick="startGame('frost')">冰霜法環</button>
+    </div>
+
+    <div id="upgrade-screen" class="panel hidden">
+        <h2 id="upgrade-title">技能強化！</h2>
+        <div id="upgrade-options"></div>
+    </div>
+
+    <div id="game-over-screen" class="panel hidden">
+        <h2 id="end-title">遊戲結束</h2>
+        <button class="btn" onclick="location.reload()">重新開始</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let gameState = 'start';
+let keys = {};
+let frameCount = 0;
+
+let enemies = [];
+let gems = [];
+let projectiles = [];
+let effects = [];
+
+const player = {
+    x: canvas.width / 2, y: canvas.height / 2,
+    size: 15, speed: 4, hp: 100, maxHp: 100,
+    exp: 0, nextExp: 5, level: 0,
+    skill: null, skillStats: {}
+};
+
+// 虛擬搖桿狀態
+const joystick = {
+    active: false,
+    startX: 0, startY: 0,
+    currentX: 0, currentY: 0,
+    maxRadius: 50
+};
+
+const skillDefinitions = {
+    missile: {
+        id: 'missile', name: '魔法追蹤彈',
+        cooldown: 50, currentCooldown: 0,
+        count: 1, speed: 5, damage: 18, 
+        turnSpeed: 1.0, // 更新：主飛彈與小飛彈統一改為每幀 1 度
+        size: 8, splitCount: 0, isSpecial: false,
+        upgrades: [
+            { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
+            { id: 'u2', desc: '快速施法：減少冷卻時間', apply: (s) => s.cooldown = Math.max(15, s.cooldown - 8) },
+            { id: 'u3', desc: '分裂魔彈：命中時分裂出小飛彈', apply: (s) => s.splitCount += 1 }
+        ],
+        specialUpgrade: { id: 's1', desc: '超級強化：虛空穿透 (皆可穿透一次敵人)', apply: (s) => s.isSpecial = true }
+    },
+    frost: {
+        id: 'frost', name: '冰霜法環',
+        cooldown: 120, currentCooldown: 0,
+        radius: 80, duration: 40, damage: 2.0, isSpecial: false,
+        upgrades: [
+            { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
+            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(40, s.cooldown - 20) },
+            { id: 'u3', desc: '延長滯留時間', apply: (s) => s.duration += 15 }
+        ],
+        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (完全凍結敵人)', apply: (s) => s.isSpecial = true }
+    }
+};
+
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+
+canvas.addEventListener('touchstart', e => {
+    if (gameState !== 'playing') return;
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    joystick.active = true;
+    joystick.startX = touch.clientX;
+    joystick.startY = touch.clientY;
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    if (!joystick.active) return;
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
+}, { passive: false });
+
+const stopJoystick = () => joystick.active = false;
+canvas.addEventListener('touchend', stopJoystick);
+canvas.addEventListener('touchcancel', stopJoystick);
+
+function startGame(skillId) {
+    player.skill = skillId;
+    player.skillStats = JSON.parse(JSON.stringify(skillDefinitions[skillId]));
+    player.skillStats.upgrades = skillDefinitions[skillId].upgrades;
+    player.skillStats.specialUpgrade = skillDefinitions[skillId].specialUpgrade;
+
+    player.x = canvas.width / 2;
+    player.y = canvas.height / 2;
+
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('exp-bar-container').classList.remove('hidden');
+    document.getElementById('status').classList.remove('hidden');
+    gameState = 'playing';
+    requestAnimationFrame(gameLoop);
+}
+
+class Enemy {
+    constructor(hpMult) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.max(canvas.width, canvas.height) / 2 + 50;
+        this.x = player.x + Math.cos(angle) * dist;
+        this.y = player.y + Math.sin(angle) * dist;
+        this.size = 12 + Math.random() * 5;
+        this.speed = 1.5 + Math.random() * 1;
+        this.hp = 30 * hpMult;
+        this.maxHp = this.hp;
+        this.frozenTimer = 0;
+    }
+    update() {
+        if (this.frozenTimer > 0) {
+            this.frozenTimer--;
+            return;
+        }
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        this.x += (dx / dist) * this.speed;
+        this.y += (dy / dist) * this.speed;
+
+        if (dist < player.size + this.size) {
+            player.hp -= 0.5;
+            if (player.hp <= 0) gameOver(false);
+        }
+    }
+    draw() {
+        if (this.frozenTimer > 0) {
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.font = `${this.size * 2}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('👾', this.x, this.y);
+    }
+}
+
+class Gem {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.size = 5;
+    }
+    update() {
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (dist < 80) {
+            this.x += (player.x - this.x) * 0.1;
+            this.y += (player.y - this.y) * 0.1;
+        }
+        if (dist < player.size + this.size) {
+            player.exp++;
+            updateUI();
+            if (player.exp >= player.nextExp && player.level < 10) levelUp();
+            return false;
+        }
+        return true;
+    }
+    draw() {
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+class Projectile {
+    constructor(x, y, target, stats, isSplit = false) {
+        this.x = x; this.y = y;
+        this.target = target;
+        this.stats = stats;
+        this.speed = stats.speed;
+        this.isSpecial = stats.isSpecial;
+        this.hitEnemies = new Set();
+        this.isSplit = isSplit;
+
+        this.damage = isSplit ? stats.damage * 0.25 : stats.damage;
+        this.size = isSplit ? 5 : (stats.size || 8); 
+        this.pierce = stats.isSpecial ? 2 : 1; 
+        this.turnSpeedRad = 1.0 * (Math.PI / 180); 
+
+        if (this.target) {
+            this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        } else {
+            this.angle = -Math.PI / 2;
+        }
+
+        this.angle += (Math.random() - 0.5) * 0.6;
+
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
+    }
+
+    update() {
+        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) {
+            return false;
+        }
+
+        if (!this.target || this.target.hp <= 0) {
+            let closest = null; let minDist = Infinity;
+            enemies.forEach(e => {
+                if (e.hp <= 0) return; 
+                if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) return;
+                if (this.hitEnemies.has(e)) return; 
+                const d = Math.hypot(e.x - this.x, e.y - this.y);
+                if (d < minDist) { minDist = d; closest = e; }
+            });
+            this.target = closest;
+        }
+
+        if (this.target) {
+            const dx = this.target.x - this.x;
+            const dy = this.target.y - this.y;
+            const targetAngle = Math.atan2(dy, dx);
+
+            let angleDiff = targetAngle - this.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad;
+            else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
+
+            this.angle += angleDiff;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+        } 
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0) continue; 
+            if (this.hitEnemies.has(e)) continue;
+
+            const dist = Math.hypot(e.x - this.x, e.y - this.y);
+            if (dist < e.size + this.size) {
+                e.hp -= this.damage;
+                this.hitEnemies.add(e);
+
+                if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
+                    for (let j = 0; j < this.stats.splitCount; j++) {
+                        let splitProj = new Projectile(this.x, this.y, null, this.stats, true);
+                        splitProj.hitEnemies.add(e); 
+                        splitProj.angle = Math.random() * Math.PI * 2;
+                        splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
+                        splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
+                        projectiles.push(splitProj);
+                    }
+                }
+
+                this.pierce--;
+                if (this.pierce <= 0) return false;
+            }
+        }
+
+        return true;
+    }
+
+    draw() {
+        ctx.fillStyle = this.isSpecial ? '#E040FB' : (this.isSplit ? '#29B6F6' : '#00BCD4');
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+class FrostEffect {
+    constructor(x, y, stats) {
+        this.x = x; this.y = y;
+        this.maxRadius = stats.radius;
+        this.radius = 0;
+        this.duration = stats.duration;
+        this.damage = stats.damage;
+        this.isSpecial = stats.isSpecial;
+    }
+    update() {
+        if (this.radius < this.maxRadius) this.radius += 8; 
+        this.duration--;
+
+        enemies.forEach(e => {
+            if (e.hp <= 0) return; 
+            if (Math.hypot(e.x - this.x, e.y - this.y) < this.radius) {
+                e.hp -= this.damage;
+                e.speed = 0.5;
+                if (this.isSpecial) e.frozenTimer = 60;
+            }
+        });
+        return this.duration > 0;
+    }
+    draw() {
+        ctx.strokeStyle = `rgba(150, 200, 255, ${this.duration / 40})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+    }
+}
+
+function fireSkill() {
+    const s = player.skillStats;
+    if (s.currentCooldown > 0) { s.currentCooldown--; return; }
+
+    if (player.skill === 'missile') {
+        let initialTarget = null;
+        let minDist = Infinity;
+        enemies.forEach(e => {
+            if (e.hp <= 0) return; 
+            if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) return;
+            const d = Math.hypot(e.x - player.x, e.y - player.y);
+            if (d < minDist) { minDist = d; initialTarget = e; }
+        });
+
+        for (let i = 0; i < s.count; i++) {
+            projectiles.push(new Projectile(player.x, player.y, initialTarget, s, false));
+        }
+        s.currentCooldown = s.cooldown;
+
+    } else if (player.skill === 'frost') {
+        effects.push(new FrostEffect(player.x, player.y, s));
+        s.currentCooldown = s.cooldown;
+    }
+}
+
+function updateUI() {
+    document.getElementById('exp-bar').style.width = `${(player.exp / player.nextExp) * 100}%`;
+    document.getElementById('status').innerText = `進化等級: ${player.level} / 10`;
+}
+
+function levelUp() {
+    joystick.active = false;
+    gameState = 'paused';
+    player.level++;
+    player.exp = 0;
+    player.nextExp = Math.floor(player.nextExp * 1.5);
+    updateUI();
+
+    const screen = document.getElementById('upgrade-screen');
+    const optionsDiv = document.getElementById('upgrade-options');
+    optionsDiv.innerHTML = '';
+    screen.classList.remove('hidden');
+
+    const s = player.skillStats;
+    let choices = [];
+
+    if (player.level === 5) {
+        document.getElementById('upgrade-title').innerText = "第 5 次進化：超級強化！";
+        choices.push({ ...s.specialUpgrade, isSpecialUI: true });
+    } else {
+        document.getElementById('upgrade-title').innerText = "技能強化！";
+        let available = [...s.upgrades].sort(() => 0.5 - Math.random());
+        choices = available.slice(0, 2);
+    }
+
+    choices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-upgrade ' + (choice.isSpecialUI ? 'btn-special' : '');
+        btn.innerText = choice.desc;
+        btn.onclick = () => {
+            choice.apply(s);
+            screen.classList.add('hidden');
+            gameState = 'playing';
+
+            if (player.level === 10) {
+                document.getElementById('status').innerText = "最終波！清空敵人以獲勝！";
+                document.getElementById('status').style.color = "#FFEB3B";
+            }
+        };
+        optionsDiv.appendChild(btn);
+    });
+}
+
+function gameOver(isWin) {
+    joystick.active = false;
+    gameState = 'gameover';
+    document.getElementById('game-over-screen').classList.remove('hidden');
+    document.getElementById('end-title').innerText = isWin ? "挑戰成功！你活下來了！" : "挑戰失敗！";
+    document.getElementById('end-title').style.color = isWin ? "#4CAF50" : "#F44336";
+}
+
+function drawJoystick() {
+    if (!joystick.active) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+
+    ctx.beginPath();
+    ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#555';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    let dx = joystick.currentX - joystick.startX;
+    let dy = joystick.currentY - joystick.startY;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > joystick.maxRadius) {
+        dx = (dx / dist) * joystick.maxRadius;
+        dy = (dy / dist) * joystick.maxRadius;
+    }
+
+    ctx.beginPath();
+    ctx.arc(joystick.startX + dx, joystick.startY + dy, 20, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function gameLoop() {
+    if (gameState !== 'playing') {
+        if(gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop);
+        return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let moveX = 0;
+    let moveY = 0;
+
+    if (keys['a'] || keys['arrowleft']) moveX -= 1;
+    if (keys['d'] || keys['arrowright']) moveX += 1;
+    if (keys['w'] || keys['arrowup']) moveY -= 1;
+    if (keys['s'] || keys['arrowdown']) moveY += 1;
+
+    if (joystick.active) {
+        const jx = joystick.currentX - joystick.startX;
+        const jy = joystick.currentY - joystick.startY;
+        const dist = Math.hypot(jx, jy);
+        if (dist > 5) { 
+            moveX = jx / dist;
+            moveY = jy / dist;
+        }
+    }
+
+    if (moveX !== 0 || moveY !== 0) {
+        const dist = Math.hypot(moveX, moveY);
+        const nx = (moveX / dist) * player.speed;
+        const ny = (moveY / dist) * player.speed;
+
+        if (player.x + nx > player.size && player.x + nx < canvas.width - player.size) player.x += nx;
+        if (player.y + ny > player.size && player.y + ny < canvas.height - player.size) player.y += ny;
+    }
+
+    fireSkill();
+
+    frameCount++;
+    let spawnRate = Math.max(20, 100 - player.level * 8);
+    if (player.level >= 10) spawnRate = 10;
+
+    let stopSpawning = player.level >= 10 && frameCount > 1200;
+
+    if (!stopSpawning && frameCount % spawnRate === 0) {
+        enemies.push(new Enemy(1 + player.level * 0.3));
+    }
+
+    for (let i = gems.length - 1; i >= 0; i--) {
+        if (!gems[i].update()) gems.splice(i, 1);
+    }
+
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        if (!projectiles[i].update()) projectiles.splice(i, 1);
+    }
+
+    for (let i = effects.length - 1; i >= 0; i--) {
+        if (!effects[i].update()) effects.splice(i, 1);
+    }
+
+    gems.forEach(g => g.draw());
+    projectiles.forEach(p => p.draw());
+    effects.forEach(e => e.draw());
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].update();
+        enemies[i].draw();
+        if (enemies[i].hp <= 0) {
+            gems.push(new Gem(enemies[i].x, enemies[i].y));
+            enemies.splice(i, 1);
+        }
+    }
+
+    ctx.font = '30px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧙', player.x, player.y);
+
+    ctx.fillStyle = '#F44336';
+    ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
+
+    drawJoystick();
+
+    if (player.level >= 10 && stopSpawning && enemies.length === 0) {
+        gameOver(true);
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+</script>
+</body>
+</html>
