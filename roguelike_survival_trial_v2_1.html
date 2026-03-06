@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v3.7 (光暈精緻版)</title>
+<title>Roguelike 生存：極限試煉 v3.8.1 (法環施法修正版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -85,7 +85,8 @@ const skillDefinitions = {
         id: 'missile', name: '魔法追蹤彈',
         cooldown: 30, 
         currentCooldown: 0,
-        count: 1, speed: 5, damage: 25, 
+        count: 1, speed: 5, 
+        damage: 20, 
         turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '多重飛彈：發射數量 +1', apply: (s) => s.count += 1 },
@@ -96,8 +97,11 @@ const skillDefinitions = {
     },
     frost: {
         id: 'frost', name: '冰霜法環',
-        cooldown: 120, currentCooldown: 0,
-        radius: 80, duration: 40, damage: 2.0, isSpecial: false,
+        cooldown: 132, // 【修正】冷卻時間從 120 增加為 132 幀 (施法變慢)
+        currentCooldown: 0,
+        radius: 80, duration: 40, 
+        damage: 1.6, 
+        isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(40, s.cooldown - 20) },
@@ -181,6 +185,7 @@ class Enemy {
         }
         
         this.maxHp = this.hp;
+        this.baseSpeed = this.speed; 
         this.frozenTimer = 0;
     }
     update() {
@@ -382,7 +387,6 @@ class Projectile {
         if (this.isSpecial) {
             ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
             ctx.beginPath();
-            // 【更新】將光暈的擴張範圍縮小，從原本的 2.5 倍改為 1.6 倍
             ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
             ctx.fill();
         }
@@ -425,9 +429,10 @@ class FrostEffect {
             
             if (distSq < this.radius * this.radius) {
                 e.hp -= this.damage;
-                e.speed = 0.5;
+                e.speed = e.baseSpeed * 0.75; 
+                
                 if (this.isSpecial) {
-                    e.frozenTimer = (e.type === 'boss') ? 10 : 60;
+                    e.frozenTimer = (e.type === 'boss') ? 5 : 30;
                 }
             }
         }
@@ -556,7 +561,7 @@ function resumeGameAfterUpgrade() {
     gameState = 'playing';
     
     if (player.level === 10) {
-        document.getElementById('status').innerText = "最終波！擊敗大魔王以獲勝！";
+        document.getElementById('status').innerText = "最終波！肅清所有怪物以獲勝！";
         document.getElementById('status').style.color = "#FFEB3B";
         
         frameCount = 0; 
@@ -568,7 +573,7 @@ function gameOver(isWin) {
     joystick.active = false;
     gameState = 'gameover';
     document.getElementById('game-over-screen').classList.remove('hidden');
-    document.getElementById('end-title').innerText = isWin ? "挑戰成功！你活下來了！" : "挑戰失敗！";
+    document.getElementById('end-title').innerText = isWin ? "挑戰成功！你肅清了戰場！" : "挑戰失敗！";
     document.getElementById('end-title').style.color = isWin ? "#4CAF50" : "#F44336";
 }
 
@@ -686,10 +691,6 @@ function gameLoop() {
         enemies[i].draw();
         
         if (enemies[i].hp <= 0) {
-            if (enemies[i].type === 'boss') {
-                gameOver(true);
-            }
-            
             let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
             for (let g = 0; g < gemCount; g++) {
                 gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
@@ -718,6 +719,10 @@ function gameLoop() {
     ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
 
     drawJoystick();
+
+    if (player.level >= 10 && stopSpawning && enemies.length === 0) {
+        gameOver(true);
+    }
 
     requestAnimationFrame(gameLoop);
 }
