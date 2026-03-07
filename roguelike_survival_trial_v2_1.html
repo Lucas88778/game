@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v4.8 (魔王抗性修正版)</title>
+<title>Roguelike 生存：極限試煉 v5.0 (傷害數字實裝版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -66,6 +66,7 @@ let gems = [];
 let healDrops = []; 
 let projectiles = [];
 let effects = [];
+let damageTexts = []; // 【新增】跳動傷害數字陣列
 
 const player = {
     x: canvas.width / 2, y: canvas.height / 2,
@@ -100,15 +101,14 @@ const skillDefinitions = {
         id: 'frost', name: '冰霜法環',
         cooldown: 120, 
         currentCooldown: 0,
-        radius: 60, 
-        duration: 40, 
-        damage: 50, 
-        frostCastCount: 0, 
+        radius: 50, // 【更新】初始半徑改為 50
+        duration: 60, // 【更新】停留時間改為 60 幀
+        damage: 40, // 【更新】初始爆發攻擊力改為 40
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
-            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(65, s.cooldown - 10) }, 
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 20 } 
+            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = Math.max(60, s.cooldown - 10) }, // 極限值為 60 幀
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 30 } // 【更新】每次增加 30 幀
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (命中瞬間結凍)', apply: (s) => s.isSpecial = true }
     }
@@ -153,12 +153,46 @@ function startGame(skillId) {
     normalKillCount = 0; 
     healDrops = []; 
     confettis = [];
+    damageTexts = [];
     
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
     gameState = 'playing';
     requestAnimationFrame(gameLoop);
+}
+
+// 【新增】傷害數字特效類別
+class DamageText {
+    constructor(x, y, damage, color) {
+        this.x = x + (Math.random() - 0.5) * 30; // 稍微散開避免字疊在一起
+        this.y = y + (Math.random() - 0.5) * 10;
+        this.damage = Math.round(damage);
+        this.color = color;
+        this.life = 35; // 存在幀數
+        this.maxLife = 35;
+        this.vy = -1.5 - Math.random(); // 向上漂浮的速度
+    }
+    update() {
+        this.y += this.vy;
+        this.life--;
+        return this.life > 0;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.fillStyle = this.color;
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        
+        // 加上黑色描邊讓數字更清楚
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.damage, this.x, this.y);
+        ctx.fillText(this.damage, this.x, this.y);
+        
+        ctx.restore();
+    }
 }
 
 class Enemy {
@@ -179,7 +213,7 @@ class Enemy {
 
         if (type === 'boss') {
             this.size = 35; 
-            this.speed = baseSpeed; 
+            this.speed = 3.0; // 【更新】大魔王移動速度直接鎖定為極具壓迫感的 3
             this.hp = 30 * hpMult * hpScale * 10.0; 
             this.emoji = '👻';
         } else if (type === 'mini') {
@@ -385,10 +419,13 @@ class Projectile {
             const hitDist = e.size + this.size;
             
             if (distSq < hitDist * hitDist) {
-                // 【魔法追蹤彈專屬】大魔王承受 65% 傷害 (35% 減傷)
                 let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
                 e.hp -= actualDamage;
                 this.hitEnemies.add(e);
+                
+                // 【新增】觸發魔法飛彈的跳動傷害數字 (黃色)
+                let textColor = (e.type === 'boss') ? '#ffaa00' : '#ffea00';
+                damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
                 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
@@ -450,6 +487,9 @@ class FrostEffect {
         if (this.radius < this.maxRadius) this.radius += 8; 
         this.duration--;
         
+        // 【機制更新】計算已經經過的幀數，用於觸發 DoT 傷害
+        let elapsedFrames = this.maxDuration - this.duration;
+        
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             if (e.hp <= 0) continue; 
@@ -459,18 +499,20 @@ class FrostEffect {
             const distSq = dx * dx + dy * dy; 
             
             if (distSq < this.radius * this.radius) {
-                // 【修正：冰霜法環專屬緩速抗性】大魔王剩餘 80% 速度，其餘怪物剩餘 60% 速度
+                // 基礎緩速效果
                 if (e.type === 'boss') {
                     e.slowMultiplier = 0.8; 
                 } else {
                     e.slowMultiplier = 0.6; 
                 }
                 
+                // 【機制更新】瞬間爆發傷害 (40點)
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e); 
-                    
-                    // 【修正：移除冰霜法環對大魔王的 35% 減傷】大魔王此處吃滿冰環爆發傷害
                     e.hp -= this.damage;
+                    
+                    // 觸發高亮藍色傷害數字
+                    damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
                     
                     if (this.isSpecial) {
                         if (e.type === 'boss') {
@@ -483,6 +525,13 @@ class FrostEffect {
                             e.frozenTimer = 30; 
                         }
                     }
+                }
+                
+                // 【機制更新】持續刮痧傷害 (每 3 幀造成 1 點傷害)
+                if (elapsedFrames > 0 && elapsedFrames % 3 === 0) {
+                    e.hp -= 1;
+                    // 觸發白色/淺藍色的微小傷害數字
+                    damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff'));
                 }
             }
         }
@@ -593,8 +642,17 @@ function levelUp() {
         
     } else {
         document.getElementById('upgrade-title').innerText = "技能強化！";
-        let available = [...s.upgrades].sort(() => 0.5 - Math.random());
+        
+        // 【機制更新】過濾掉已經達到極限值的「增加發動頻率」選項
+        let available = [...s.upgrades].filter(choice => {
+            if (s.id === 'missile' && choice.id === 'u2' && s.cooldown <= 10) return false;
+            if (s.id === 'frost' && choice.id === 'u2' && s.cooldown <= 60) return false;
+            return true;
+        });
+        
+        available.sort(() => 0.5 - Math.random());
         let choices = available.slice(0, 2);
+        
         choices.forEach(choice => {
             let btn = document.createElement('button');
             btn.className = 'btn btn-upgrade';
@@ -702,6 +760,10 @@ function gameLoop() {
             projectiles.forEach(p => p.draw());
             effects.forEach(e => e.draw());
             enemies.forEach(e => e.draw());
+            
+            // 繪製殘留的傷害數字
+            damageTexts.forEach(dt => dt.draw());
+            
             ctx.font = '30px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -784,6 +846,10 @@ function gameLoop() {
     for (let i = effects.length - 1; i >= 0; i--) {
         if (!effects[i].update()) effects.splice(i, 1);
     }
+    
+    for (let i = damageTexts.length - 1; i >= 0; i--) {
+        if (!damageTexts[i].update()) damageTexts.splice(i, 1);
+    }
 
     gems.forEach(g => g.draw());
     healDrops.forEach(h => h.draw()); 
@@ -811,6 +877,9 @@ function gameLoop() {
             enemies.splice(i, 1);
         }
     }
+    
+    // 【更新】在畫面上方繪製跳動傷害數字
+    damageTexts.forEach(dt => dt.draw());
 
     ctx.font = '30px Arial';
     ctx.textAlign = 'center';
