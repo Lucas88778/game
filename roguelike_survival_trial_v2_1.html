@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.2 (召喚狂暴平衡版)</title>
+<title>Roguelike 生存：極限試煉 v6.3 (收益前置平滑版)</title>
 <style>
     body {
         margin: 0;
@@ -228,37 +228,37 @@ const joystick = {
     maxRadius: 50
 };
 
-// 召喚系階級設定
+// 召喚系階級設定 (收益前置 + 漸進解鎖)
 const summonTierTables = {
     a: [
         { spawnInterval: 300, maxHounds: 1 },
-        { spawnInterval: 282, maxHounds: 2 },
-        { spawnInterval: 264, maxHounds: 3 },
-        { spawnInterval: 246, maxHounds: 4 },
-        { spawnInterval: 228, maxHounds: 5 },
-        { spawnInterval: 210, maxHounds: 6 },
-        { spawnInterval: 192, maxHounds: 7 },
-        { spawnInterval: 174, maxHounds: 8 } // 破限預留
+        { spawnInterval: 270, maxHounds: 2 },
+        { spawnInterval: 240, maxHounds: 3 },
+        { spawnInterval: 215, maxHounds: 4 },
+        { spawnInterval: 195, maxHounds: 5 },
+        { spawnInterval: 180, maxHounds: 6 },
+        { spawnInterval: 165, maxHounds: 7 },
+        { spawnInterval: 150, maxHounds: 8 } // 破限預留
     ],
     b: [
-        { hp: 120, atk: 5, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlust: false },
-        { hp: 136, atk: 6, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlust: false },
-        { hp: 152, atk: 6, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlust: false },
-        { hp: 168, atk: 7, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlust: false },
-        { hp: 184, atk: 7, attackInterval: 28, damageReduction: 0.10, speed: 3.45, bloodlust: true },
-        { hp: 200, atk: 8, attackInterval: 28, damageReduction: 0.20, speed: 3.45, bloodlust: true },
-        { hp: 216, atk: 8, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlust: true },
-        { hp: 232, atk: 9, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlust: true }
+        { hp: 120, atk: 5, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlustCdr: 0.0 },
+        { hp: 140, atk: 6, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlustCdr: 0.3 },
+        { hp: 160, atk: 7, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.4 },
+        { hp: 175, atk: 8, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.5 },
+        { hp: 190, atk: 8, attackInterval: 28, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.6 },
+        { hp: 205, atk: 9, attackInterval: 28, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 0.8 },
+        { hp: 220, atk: 9, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 1.0 },
+        { hp: 235, atk: 10, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 1.0 }
     ],
     c: [
-        { convertTime: 420, frogHp: 210, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 1, explosionDamage: 18 },
-        { convertTime: 394, frogHp: 234, frogAtk: 11, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 74, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 1, explosionDamage: 18 },
-        { convertTime: 368, frogHp: 258, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 78, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 2, explosionDamage: 18 },
-        { convertTime: 342, frogHp: 282, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 82, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 2, explosionDamage: 22 },
-        { convertTime: 316, frogHp: 306, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 86, poisonInterval: 20, poisonDamage: 5, poisonBossDamage: 3, explosionDamage: 22 },
-        { convertTime: 290, frogHp: 330, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 90, poisonInterval: 20, poisonDamage: 6, poisonBossDamage: 3, explosionDamage: 26 },
-        { convertTime: 264, frogHp: 354, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 94, poisonInterval: 19, poisonDamage: 6, poisonBossDamage: 4, explosionDamage: 26 },
-        { convertTime: 238, frogHp: 378, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 7, poisonRadius: 98, poisonInterval: 19, poisonDamage: 7, poisonBossDamage: 4, explosionDamage: 30 }
+        { convertTime: 420, frogHp: 210, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 1, explosionDamage: 9 },
+        { convertTime: 370, frogHp: 240, frogAtk: 11, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 74, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 1, explosionDamage: 12 },
+        { convertTime: 320, frogHp: 270, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 78, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 2, explosionDamage: 15 },
+        { convertTime: 280, frogHp: 290, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 82, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 2, explosionDamage: 18 },
+        { convertTime: 250, frogHp: 310, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 86, poisonInterval: 20, poisonDamage: 5, poisonBossDamage: 3, explosionDamage: 21 },
+        { convertTime: 230, frogHp: 330, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 90, poisonInterval: 20, poisonDamage: 6, poisonBossDamage: 3, explosionDamage: 24 },
+        { convertTime: 215, frogHp: 350, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 94, poisonInterval: 19, poisonDamage: 6, poisonBossDamage: 4, explosionDamage: 27 },
+        { convertTime: 200, frogHp: 370, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 7, poisonRadius: 98, poisonInterval: 19, poisonDamage: 7, poisonBossDamage: 4, explosionDamage: 30 }
     ]
 };
 
@@ -350,7 +350,7 @@ function recalcSummonStats(s) {
     s.houndAttackInterval = b.attackInterval;
     s.houndBaseSpeed = b.speed;
     s.houndDamageReduction = b.damageReduction;
-    s.houndBloodlust = b.bloodlust;
+    s.houndBloodlustCdr = b.bloodlustCdr;
 
     s.tetherDuration = c.convertTime;
     s.tetherSlow = 0.15;
@@ -417,8 +417,10 @@ function getSummonUpgradeLabel(pathKey) {
         if (next.damageReduction !== cur.damageReduction) {
             extra += `\n獵犬承受傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
         }
-        if (!cur.bloodlust && next.bloodlust) {
-            extra += `\n新增：嗜血狂暴 (擊殺重置攻擊並加速)`;
+        if (cur.bloodlustCdr === 0 && next.bloodlustCdr > 0) {
+            extra += `\n新增：擊殺後冷卻減免 ${(next.bloodlustCdr * 100).toFixed(0)}% 並短暫加速`;
+        } else if (next.bloodlustCdr > cur.bloodlustCdr) {
+            extra += `\n狂暴冷卻減免 ${(cur.bloodlustCdr * 100).toFixed(0)}% → ${(next.bloodlustCdr * 100).toFixed(0)}%`;
         }
         return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
     }
@@ -434,12 +436,8 @@ function getSummonUpgradeLabel(pathKey) {
         if (player.skillStats.isSpecial) {
             poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
         }
-        let explosionText = '';
-        if (next.explosionDamage !== cur.explosionDamage) {
-            explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} → ${next.explosionDamage}`;
-        } else if (currentTier === 0) {
-            explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} (不變)`;
-        }
+        let explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} → ${next.explosionDamage}`;
+        
         return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 🐸 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}${explosionText}\n現存召喚物回復 25% 最大生命`;
     }
 
@@ -940,9 +938,10 @@ class Summon {
                         this.type === 'hound' ? '#FF9800' : '#8BC34A'
                     ));
 
-                    // 嗜血狂暴判定：如果這下攻擊殺死敵人，且具備此能力
-                    if (this.target.hp <= 0 && this.type === 'hound' && player.skillStats.houndBloodlust) {
-                        this.attackCooldown = 0;
+                    // 嗜血狂暴判定：如果殺死敵人，且具備此能力，則依比例縮短冷卻 (加入 ICD 10 幀防呆)
+                    if (this.target.hp <= 0 && this.type === 'hound' && player.skillStats.houndBloodlustCdr > 0) {
+                        let reducedCooldown = this.attackInterval * (1 - player.skillStats.houndBloodlustCdr);
+                        this.attackCooldown = Math.max(10, Math.floor(reducedCooldown)); 
                         this.speedBuffTimer = 30; // 狂奔 30 幀
                         damageTexts.push(new DamageText(this.x, this.y - 15, "狂暴!", '#FF5252'));
                     } else {
@@ -1043,7 +1042,7 @@ class TetherEffect {
         effects.push(new TransformPoof(this.target.x, this.target.y));
 
         // 觸發轉化毒爆
-        let expDmg = player.skillStats.explosionDamage || 18;
+        let expDmg = player.skillStats.explosionDamage || 9;
         let expRad = 60;
         effects.push(new PoisonExplosion(this.target.x, this.target.y, expRad));
         
