@@ -3,20 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.5 (蛙化毒師純粹版)</title>
+<title>Roguelike 生存：極限試煉 v5.3 (召喚法術降臨)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
     #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    .panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 10px; border: 2px solid #555; text-align: center; pointer-events: auto; width: 85%; max-width: 450px; box-sizing: border-box; }
-    .btn { display: inline-block; background: #4CAF50; color: white; padding: 10px 15px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background 0.3s; }
+    .panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 10px; border: 2px solid #555; text-align: center; pointer-events: auto; width: 80%; max-width: 400px; box-sizing: border-box; }
+    .btn { display: inline-block; background: #4CAF50; color: white; padding: 10px 20px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background 0.3s; }
     .btn:hover { background: #45a049; }
     .btn-upgrade { background: #2196F3; width: 100%; margin: 10px 0; display: block; }
     .btn-upgrade:hover { background: #1976D2; }
     .btn-special { background: #ff9800; font-weight: bold; text-shadow: 1px 1px 2px black; }
     .btn-special:hover { background: #e68a00; }
-    .btn-summoner { background: #9C27B0; } 
-    .btn-summoner:hover { background: #7B1FA2; }
     #exp-bar-container { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 80%; height: 20px; background: #333; border-radius: 10px; border: 2px solid #777; }
     #exp-bar { height: 100%; width: 0%; background: #4CAF50; border-radius: 8px; transition: width 0.2s; }
     #status { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); font-size: 18px; text-shadow: 1px 1px 2px black; }
@@ -38,7 +36,7 @@
         <p>請選擇你的初始技能：</p>
         <button class="btn" onclick="startGame('missile')">魔法追蹤彈</button>
         <button class="btn" onclick="startGame('frost')">冰霜法環</button>
-        <button class="btn btn-summoner" onclick="startGame('summoner')">召喚法術</button>
+        <button class="btn" style="background:#673AB7" onclick="startGame('summon')">召喚法術</button>
     </div>
 
     <div id="upgrade-screen" class="panel hidden">
@@ -70,8 +68,8 @@ let healDrops = [];
 let projectiles = [];
 let effects = [];
 let damageTexts = []; 
-let minions = []; 
-let markedEnemy = null; 
+let summons = []; // 召喚物陣列
+let tethers = []; // 牽線特效陣列
 
 let level10Frames = 0;
 let bossIsDead = false;
@@ -84,16 +82,16 @@ const player = {
 };
 
 const joystick = {
-    active: false,
-    startX: 0, startY: 0,
-    currentX: 0, currentY: 0,
-    maxRadius: 50
+    active: false, startX: 0, startY: 0,
+    currentX: 0, currentY: 0, maxRadius: 50
 };
 
 const skillDefinitions = {
     missile: {
         id: 'missile', name: '魔法追蹤彈',
-        cooldown: 45, currentCooldown: 0, count: 1, speed: 5, damage: 15, turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
+        cooldown: 45, currentCooldown: 0,
+        count: 1, speed: 5, damage: 15, 
+        turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
         upgrades: [
             { id: 'u1', desc: '魔法追蹤彈+1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(2, s.cooldown - 10) : Math.max(10, s.cooldown - 10) },
@@ -103,7 +101,8 @@ const skillDefinitions = {
     },
     frost: {
         id: 'frost', name: '冰霜法環',
-        cooldown: 120, currentCooldown: 0, radius: 50, duration: 60, damage: 40, isSpecial: false,
+        cooldown: 120, currentCooldown: 0,
+        radius: 50, duration: 60, damage: 40, isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(10, s.cooldown - 10) : Math.max(60, s.cooldown - 10) }, 
@@ -111,22 +110,22 @@ const skillDefinitions = {
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (命中瞬間結凍)', apply: (s) => s.isSpecial = true }
     },
-    summoner: {
-        id: 'summoner', name: '召喚法術', 
-        controlRate: 1 / 6, // 【更新】6 秒控制完成
-        houndMax: 3,
-        houndCooldown: 300, 
-        currentHoundCooldown: 300,
-        critChance: 0, // 爆擊率
-        dmgReduction: 0, // 減傷率
-        slowRadius: 100, // 緩速半徑
+    summon: {
+        id: 'summon', name: '召喚法術',
+        tetherDuration: 600, // 10秒 = 600幀
+        fearRadius: 50,
+        fearCooldown: 240, // 4秒
+        summonBonusHp: 0,
+        summonBonusAtk: 0,
         isSpecial: false,
+        houndSpawnTimer: 0,
+        currentTetherTarget: null,
         upgrades: [
-            { id: 'u1', desc: '召喚物爆擊 (獲得25%雙倍傷害)', apply: (s) => s.critChance += 0.25 },
-            { id: 'u2', desc: '召喚物減傷 (受到的傷害減少20%)', apply: (s) => s.dmgReduction += 0.2 },
-            { id: 'u3', desc: '緩速範圍擴散 (標記緩速半徑增加)', apply: (s) => s.slowRadius += 40 }
+            { id: 'u1', desc: '【縮短控制時間】', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
+            { id: 'u2', desc: '【召喚物加強】', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
+            { id: 'u3', desc: '【恐懼擴散】', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (🐸產生持續毒霧)', apply: (s) => s.isSpecial = true }
+        specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
     }
 };
 
@@ -139,20 +138,15 @@ canvas.addEventListener('touchstart', e => {
     e.preventDefault();
     const touch = e.changedTouches[0];
     joystick.active = true;
-    joystick.startX = touch.clientX;
-    joystick.startY = touch.clientY;
-    joystick.currentX = touch.clientX;
-    joystick.currentY = touch.clientY;
+    joystick.startX = touch.clientX; joystick.startY = touch.clientY;
+    joystick.currentX = touch.clientX; joystick.currentY = touch.clientY;
 }, { passive: false });
-
 canvas.addEventListener('touchmove', e => {
     if (!joystick.active) return;
     e.preventDefault();
     const touch = e.changedTouches[0];
-    joystick.currentX = touch.clientX;
-    joystick.currentY = touch.clientY;
+    joystick.currentX = touch.clientX; joystick.currentY = touch.clientY;
 }, { passive: false });
-
 const stopJoystick = () => joystick.active = false;
 canvas.addEventListener('touchend', stopJoystick);
 canvas.addEventListener('touchcancel', stopJoystick);
@@ -163,32 +157,26 @@ function startGame(skillId) {
     player.skillStats.upgrades = skillDefinitions[skillId].upgrades;
     player.skillStats.specialUpgrade = skillDefinitions[skillId].specialUpgrade;
     
-    player.x = canvas.width / 2;
-    player.y = canvas.height / 2;
-    player.hp = 100;
-    player.maxHp = 100;
+    player.x = canvas.width / 2; player.y = canvas.height / 2;
+    player.hp = player.maxHp;
+    player.level = 0; player.exp = 0; player.nextExp = 5;
     
     normalKillCount = 0; 
-    healDrops = []; 
-    confettis = [];
-    damageTexts = []; 
-    enemies = [];
-    projectiles = [];
-    effects = [];
-    minions = [];
-    markedEnemy = null; 
-    level10Frames = 0;
-    bossIsDead = false;
+    enemies = []; gems = []; healDrops = []; projectiles = []; effects = []; damageTexts = [];
+    summons = []; tethers = [];
+    
+    level10Frames = 0; bossIsDead = false;
 
-    // 【更新】召喚師開局 2 隻獵犬
-    if (skillId === 'summoner') {
-        minions.push(new Minion(player.x - 20, player.y + 20, 'hound')); 
-        minions.push(new Minion(player.x + 20, player.y + 20, 'hound')); 
+    // 召喚法術開局自帶 2 隻獵犬
+    if (skillId === 'summon') {
+        summons.push(new Summon(player.x - 30, player.y, 'hound'));
+        summons.push(new Summon(player.x + 30, player.y, 'hound'));
     }
     
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
+    updateUI();
     gameState = 'playing';
     requestAnimationFrame(gameLoop);
 }
@@ -199,25 +187,19 @@ class DamageText {
         this.y = y + (Math.random() - 0.5) * 10;
         this.damage = Math.round(damage);
         this.color = color;
-        this.life = 35; 
-        this.maxLife = 35;
+        this.life = 35; this.maxLife = 35;
         this.vy = -1.5 - Math.random(); 
     }
     update() {
-        this.y += this.vy;
-        this.life--;
+        this.y += this.vy; this.life--;
         return this.life > 0;
     }
     draw() {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
-        ctx.fillStyle = this.color;
-        ctx.font = 'bold 18px Arial';
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeText(this.damage, this.x, this.y);
-        ctx.fillText(this.damage, this.x, this.y);
+        ctx.fillStyle = this.color; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+        ctx.strokeText(this.damage, this.x, this.y); ctx.fillText(this.damage, this.x, this.y);
         ctx.restore();
     }
 }
@@ -238,46 +220,51 @@ class Enemy {
         }
 
         if (type === 'boss') {
-            this.size = 35; 
-            this.speed = 3.0; 
-            this.hp = 30 * hpMult * hpScale * 10.0; 
-            this.emoji = '👻';
+            this.size = 35; this.speed = 3.0; this.hp = 30 * hpMult * hpScale * 10.0; this.emoji = '👻';
         } else if (type === 'mini') {
-            this.size = 18;
-            this.speed = baseSpeed * 0.6;
-            this.hp = 30 * hpMult * hpScale * 2.0;
-            this.emoji = '👹';
+            this.size = 18; this.speed = baseSpeed * 0.6; this.hp = 30 * hpMult * hpScale * 2.0; this.emoji = '👹';
         } else {
-            this.size = 12 + Math.random() * 5;
-            this.speed = baseSpeed;
-            this.hp = 30 * hpMult * hpScale;
-            this.emoji = '👾';
+            this.size = 12 + Math.random() * 5; this.speed = baseSpeed; this.hp = 30 * hpMult * hpScale; this.emoji = '👾';
         }
         
-        this.maxHp = this.hp;
-        this.baseSpeed = this.speed; 
-        this.frozenTimer = 0;
-        this.frostHitCount = 0;
-        this.slowMultiplier = 1.0;
+        this.maxHp = this.hp; this.baseSpeed = this.speed; 
+        this.frozenTimer = 0; this.frostHitCount = 0; this.slowMultiplier = 1.0;
         
-        this.controlValue = 0;
-        this.tauntedBy = null; 
+        // 召喚法術相關機制
+        this.tauntedBy = null; // 嘲諷此怪物的召喚物
+        this.fearTimer = 0;    // 恐懼狀態計時
+        this.fearSourceX = 0;
+        this.fearSourceY = 0;
     }
     update() {
+        // 1. 恐懼優先 (反向逃跑)
+        if (this.fearTimer > 0) {
+            this.fearTimer--;
+            const dx = this.x - this.fearSourceX;
+            const dy = this.y - this.fearSourceY;
+            const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+            const speed = this.baseSpeed * 0.2; // 恐懼時移動速度降為 20%
+            this.x += (dx / dist) * speed;
+            this.y += (dy / dist) * speed;
+            return; 
+        }
+
         if (this.frozenTimer > 0) {
-            this.frozenTimer--;
-            this.slowMultiplier = 1.0; 
+            this.frozenTimer--; this.slowMultiplier = 1.0; 
             return;
         }
         
+        // 2. 判斷仇恨目標
         let targetX = player.x;
         let targetY = player.y;
-        let isTaunted = false;
-        
+        let targetHitDist = player.size + this.size;
+        let targetObj = player;
+
         if (this.tauntedBy && this.tauntedBy.hp > 0) {
             targetX = this.tauntedBy.x;
             targetY = this.tauntedBy.y;
-            isTaunted = true;
+            targetHitDist = this.tauntedBy.size + this.size;
+            targetObj = this.tauntedBy;
         } else {
             this.tauntedBy = null; 
         }
@@ -285,215 +272,243 @@ class Enemy {
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         const distSq = dx * dx + dy * dy; 
-        const dist = Math.sqrt(distSq);
+        const dist = Math.sqrt(distSq) || 1;
         
-        let hitDist = isTaunted ? (this.size + this.tauntedBy.size) : (player.size + this.size);
+        let actualSpeed = this.baseSpeed * this.slowMultiplier;
         
-        // 【更新】標記時定身，未標記時受結界緩速
-        if (this === markedEnemy) {
-            // 完全定住不動
-        } else {
-            let actualSpeed = this.baseSpeed * this.slowMultiplier;
-            if (markedEnemy && player.skill === 'summoner') {
-                let sr = player.skillStats.slowRadius;
-                if ((this.x - markedEnemy.x)**2 + (this.y - markedEnemy.y)**2 < sr * sr) {
-                    actualSpeed *= 0.5; // 淡紫色結界緩速 50%
-                }
-            }
-            if (dist > hitDist * 0.5) {
-                this.x += (dx / dist) * actualSpeed;
-                this.y += (dy / dist) * actualSpeed;
-            }
-        }
+        this.x += (dx / dist) * actualSpeed;
+        this.y += (dy / dist) * actualSpeed;
         
-        this.slowMultiplier = 1.0;
+        this.slowMultiplier = 1.0; // 每幀重置
         
-        if (distSq < hitDist * hitDist) {
-            if (isTaunted) {
-                let dr = (player.skill === 'summoner') ? (player.skillStats.dmgReduction || 0) : 0;
-                this.tauntedBy.hp -= 0.5 * (1 - dr); 
-            } else if (this !== markedEnemy) { 
-                player.hp -= 0.5; 
+        // 碰撞傷害
+        if (distSq < targetHitDist * targetHitDist) {
+            if (targetObj === player) {
+                player.hp -= 0.5;
                 if (player.hp <= 0) gameOver(false);
+            } else {
+                targetObj.hp -= 0.5; // 怪物對召喚物造成傷害
             }
         }
     }
     draw() {
-        // 繪製標記怪的淡紫色緩速結界
-        if (this === markedEnemy) {
-            let sr = player.skillStats.slowRadius;
-            ctx.fillStyle = 'rgba(180, 130, 255, 0.25)';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, sr, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
         if (this.frozenTimer > 0) {
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2); ctx.fill();
         }
-        
-        ctx.font = `${this.size * 2}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.emoji, this.x, this.y); 
+        ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y); 
 
-        if (this.type === 'boss' && this.frostHitCount > 0) {
-            ctx.font = `16px Arial`;
-            ctx.textAlign = 'center';
-            let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
-            ctx.fillText(mark, this.x, this.y - this.size - 8);
-        }
-        
-        if (this === markedEnemy) {
-            ctx.fillStyle = '#222';
-            ctx.fillRect(this.x - 20, this.y - this.size - 15, 40, 6);
-            ctx.fillStyle = '#9C27B0'; 
-            ctx.fillRect(this.x - 20, this.y - this.size - 15, 40 * (this.controlValue / this.maxHp), 6);
-            // 標記改為 ⬇️
-            ctx.font = `20px Arial`;
-            ctx.fillText('⬇️', this.x, this.y - this.size - 25);
+        if (this.fearTimer > 0) {
+            ctx.font = `18px Arial`; ctx.fillText('😱', this.x, this.y - this.size - 8);
+        } else if (this.type === 'boss' && this.frostHitCount > 0) {
+            ctx.font = `16px Arial`; let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️'; ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
     }
 }
 
-class Minion {
-    constructor(x, y, type, baseEnemy = null) {
-        this.x = x; 
-        this.y = y;
-        this.type = type;
-        this.target = null;
-        this.atkTimer = 0;
+// === 召喚物 (獵犬與青蛙) 類別 ===
+class Summon {
+    constructor(x, y, type, sourceEnemyAtk = 10, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
+        this.x = x; this.y = y;
+        this.type = type; 
+        this.size = 15;
+        const s = player.skillStats;
         
         if (type === 'hound') {
-            this.size = 12;
-            this.maxHp = 200; // 獵犬血量翻倍
-            this.hp = 200;
-            this.speed = 3.5;
-            this.damage = 12;
-            this.emoji = '🐕';
-        } else {
-            // converted
-            this.size = baseEnemy.size;
-            this.maxHp = baseEnemy.maxHp * 2; // 🐸血量翻倍
+            this.maxHp = 150 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.speed = baseEnemy.baseSpeed;
-            this.damage = (baseEnemy.type === 'mini' ? 20 : 10);
-            this.emoji = '🐸'; 
+            this.atk = 10 + (s ? s.summonBonusAtk : 0);
+            this.speed = 3.5;
+            this.emoji = '🐕';
+        } else if (type === 'frog') {
+            this.maxHp = (sourceEnemyMaxHp * 1.5) + (s ? s.summonBonusHp : 0);
+            this.hp = this.maxHp;
+            this.atk = sourceEnemyAtk + (s ? s.summonBonusAtk : 0);
+            this.speed = sourceEnemySpeed;
+            this.emoji = '🐸';
         }
+        
+        this.target = null;
+        this.attackCooldown = 0;
+        this.poisonTimer = 0;
     }
     
     update() {
-        if (this.target) {
-            if (this.target.hp <= 0 || this.target === markedEnemy || (this.target.tauntedBy !== this && this.target.tauntedBy !== null)) {
-                if (this.target.tauntedBy === this) this.target.tauntedBy = null;
-                this.target = null;
-            }
-        }
-        
-        if (!this.target) {
-            let closest = null; 
-            let minDistSq = Infinity;
-            for (let i = 0; i < enemies.length; i++) {
-                let e = enemies[i];
-                // 【更新】畫面外限制，絕不鎖定螢幕外的敵人
-                if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-                if (e === markedEnemy || e.tauntedBy !== null) continue;
-                
-                const dx = e.x - this.x;
-                const dy = e.y - this.y;
-                const dSq = dx * dx + dy * dy; 
-                if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
-            }
-            if (closest) {
-                this.target = closest;
-                closest.tauntedBy = this; 
-            }
-        }
-        
-        if (this.target) {
-            const dx = this.target.x - this.x;
-            const dy = this.target.y - this.y;
-            const distSq = dx * dx + dy * dy; 
-            const dist = Math.sqrt(distSq);
-            const hitDist = this.size + this.target.size;
-            
-            if (dist > hitDist * 0.8) {
-                this.x += (dx / dist) * this.speed;
-                this.y += (dy / dist) * this.speed;
-            }
-            
-            if (this.atkTimer > 0) this.atkTimer--;
-            if (distSq <= hitDist * hitDist && this.atkTimer <= 0) {
-                let s = player.skillStats;
-                let isCrit = Math.random() < (s.critChance || 0);
-                let actualDmg = isCrit ? this.damage * 2 : this.damage;
-                
-                this.target.hp -= actualDmg;
-                
-                let color = isCrit ? '#ffaa00' : '#a1ff8a';
-                damageTexts.push(new DamageText(this.target.x, this.target.y, actualDmg, color)); 
-                
-                this.atkTimer = 30; 
-            }
-        }
-        
-        // 【機制】🐸的毒霧攻擊 (終極強化)
-        let s = player.skillStats;
-        if (this.type === 'converted' && s.isSpecial) {
-            if (frameCount % 20 === 0) { // 每 1/3 秒觸發一次毒傷疊加
+        // 劇毒沼澤機制
+        if (this.type === 'frog' && player.skillStats.isSpecial) {
+            this.poisonTimer++;
+            if (this.poisonTimer >= 20) { // 每 1/3 秒 (20幀)
+                this.poisonTimer = 0;
                 for (let i = 0; i < enemies.length; i++) {
                     let e = enemies[i];
                     if (e.hp <= 0) continue;
-                    let edx = e.x - this.x;
-                    let edy = e.y - this.y;
-                    if (edx * edx + edy * edy < 120 * 120) {
+                    const dx = e.x - this.x; const dy = e.y - this.y;
+                    if (dx*dx + dy*dy <= 80*80) { // 半徑 80
                         e.hp -= 2; 
-                        damageTexts.push(new DamageText(e.x, e.y, 2, '#ccffcc')); 
+                        damageTexts.push(new DamageText(e.x, e.y, 2, '#76FF03'));
                     }
                 }
             }
         }
-        
-        if (this.hp <= 0 && this.target && this.target.tauntedBy === this) {
-            this.target.tauntedBy = null;
+
+        // 尋找單挑目標 (1v1 嘲諷攔截)
+        if (!this.target || this.target.hp <= 0) {
+            this.target = null;
+            let closest = null; let minDistSq = Infinity;
+            for (let i = 0; i < enemies.length; i++) {
+                let e = enemies[i];
+                // 不找已經被其他召喚物嘲諷的怪
+                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this)) continue;
+                const dx = e.x - this.x; const dy = e.y - this.y;
+                const dSq = dx * dx + dy * dy;
+                if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
+            }
+            if (closest) {
+                this.target = closest;
+                closest.tauntedBy = this; // 強制嘲諷
+            }
+        }
+
+        // 移動與攻擊
+        if (this.target) {
+            const dx = this.target.x - this.x; const dy = this.target.y - this.y;
+            const distSq = dx * dx + dy * dy; const dist = Math.sqrt(distSq) || 1;
+            const hitDist = this.size + this.target.size;
+            
+            if (distSq > hitDist * hitDist) {
+                this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed;
+            } else {
+                if (this.attackCooldown <= 0) {
+                    this.target.hp -= this.atk;
+                    damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, '#FF9800'));
+                    this.attackCooldown = 30; // 每 0.5 秒咬一次
+                }
+            }
+        } else {
+            // 沒怪時跟著玩家
+            const dx = player.x - this.x; const dy = player.y - this.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq > 100 * 100) {
+                const dist = Math.sqrt(distSq);
+                this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed;
+            }
         }
         
+        if (this.attackCooldown > 0) this.attackCooldown--;
         return this.hp > 0;
     }
     
     draw() {
-        let s = player.skillStats;
-        if (this.type === 'converted' && s.isSpecial) {
-            // 繪製毒霧
-            ctx.fillStyle = 'rgba(50, 200, 50, 0.15)';
-            ctx.beginPath(); ctx.arc(this.x, this.y, 120, 0, Math.PI*2); ctx.fill();
+        if (this.type === 'frog' && player.skillStats.isSpecial) {
+            ctx.fillStyle = 'rgba(118, 255, 3, 0.2)'; ctx.beginPath(); ctx.arc(this.x, this.y, 80, 0, Math.PI*2); ctx.fill();
         }
-        
-        ctx.font = `${this.size * 2}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        if (this.type === 'converted') {
-            ctx.fillStyle = 'rgba(100, 255, 100, 0.4)';
-            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
-        }
-        
-        ctx.fillText(this.emoji, this.x, this.y); 
-        
-        ctx.fillStyle = '#F44336';
-        ctx.fillRect(this.x - 10, this.y + this.size + 2, 20, 4);
-        ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(this.x - 10, this.y + this.size + 2, 20 * (Math.max(0, this.hp) / this.maxHp), 4);
+        ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
+        // 血條
+        ctx.fillStyle = '#F44336'; ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
+        ctx.fillStyle = '#4CAF50'; ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
     }
 }
 
+// === 牽線支配特效 ===
+class TetherEffect {
+    constructor(target, stats) {
+        this.target = target;
+        this.stats = stats;
+        this.duration = 0; 
+        this.maxDuration = stats.tetherDuration;
+        this.pulseTimer = 0; // 一牽線馬上恐懼
+    }
+    update() {
+        if (!this.target || this.target.hp <= 0) {
+            this.convertToFrog(); return false;
+        }
+        
+        this.target.slowMultiplier = 0.5; // 造成50%緩速
+        
+        // 恐懼波
+        if (this.pulseTimer <= 0) {
+            this.pulseTimer = this.stats.fearCooldown;
+            for (let i = 0; i < enemies.length; i++) {
+                let e = enemies[i];
+                if (e === this.target || e.hp <= 0) continue;
+                const dx = e.x - this.target.x; const dy = e.y - this.target.y;
+                if (dx*dx + dy*dy <= this.stats.fearRadius * this.stats.fearRadius) {
+                    e.fearTimer = 30; // 恐懼0.5秒
+                    e.fearSourceX = this.target.x; e.fearSourceY = this.target.y;
+                }
+            }
+        } else {
+            this.pulseTimer--;
+        }
+        
+        this.duration++;
+        if (this.duration >= this.maxDuration) {
+            this.target.hp = 0; 
+            this.convertToFrog(); return false;
+        }
+        return true;
+    }
+    
+    convertToFrog() {
+        if (!this.target) return;
+        let atk = this.target.type === 'mini' ? 15 : 10;
+        summons.push(new Summon(this.target.x, this.target.y, 'frog', atk, this.target.maxHp, this.target.baseSpeed));
+        player.skillStats.currentTetherTarget = null; 
+    }
+    
+    draw() {
+        if (!this.target) return;
+        ctx.save();
+        // 虛線牽線
+        ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(player.x, player.y); ctx.lineTo(this.target.x, this.target.y);
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
+        
+        // 注入能量外環
+        ctx.beginPath(); ctx.arc(this.target.x, this.target.y, this.target.size + 10, -Math.PI/2, -Math.PI/2 + (this.duration / this.maxDuration) * Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 3; ctx.setLineDash([]); ctx.stroke();
+        
+        // 恐懼範圍示意
+        ctx.beginPath(); ctx.arc(this.target.x, this.target.y, this.stats.fearRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 0, 255, 0.1)'; ctx.fill();
+        ctx.restore();
+    }
+}
+
+class Gem {
+    constructor(x, y) { this.x = x; this.y = y; this.size = 5; }
+    update() {
+        const dx = player.x - this.x; const dy = player.y - this.y; const distSq = dx * dx + dy * dy; 
+        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        if (distSq < (player.size + this.size) * (player.size + this.size)) {
+            player.exp++; updateUI();
+            if (player.exp >= player.nextExp && player.level < 10) levelUp();
+            return false;
+        }
+        return true;
+    }
+    draw() { ctx.fillStyle = '#4CAF50'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+}
+
+class HealDrop {
+    constructor(x, y) { this.x = x; this.y = y; this.size = 5; }
+    update() {
+        const dx = player.x - this.x; const dy = player.y - this.y; const distSq = dx * dx + dy * dy;
+        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        if (distSq < (player.size + this.size) * (player.size + this.size)) {
+            player.hp = Math.min(player.maxHp, player.hp + 20); return false; 
+        }
+        return true;
+    }
+    draw() { ctx.fillStyle = '#FF5252'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+}
+
 class Projectile {
+    // ... 原本的魔法飛彈邏輯維持不變 ...
     constructor(x, y, target, stats, isSplit = false) {
-        this.x = x; this.y = y; this.target = target; this.stats = stats; this.speed = stats.speed; this.isSpecial = stats.isSpecial; this.hitEnemies = new Set(); this.isSplit = isSplit;
-        this.damage = isSplit ? stats.damage * 0.40 : stats.damage; this.size = isSplit ? 3.5 : (stats.size || 12); this.pierce = 1; 
+        this.x = x; this.y = y; this.target = target; this.stats = stats;
+        this.speed = stats.speed; this.isSpecial = stats.isSpecial;
+        this.hitEnemies = new Set(); this.isSplit = isSplit;
+        this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
+        this.size = isSplit ? 3.5 : (stats.size || 12); this.pierce = 1; 
         this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
         if (this.target) this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x); else this.angle = -Math.PI / 2;
         if (!isSplit) this.angle += (Math.random() - 0.5) * 0.6;
@@ -506,31 +521,36 @@ class Projectile {
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 if (e.hp <= 0 || this.hitEnemies.has(e) || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-                const dx = e.x - this.x; const dy = e.y - this.y; const dSq = dx * dx + dy * dy; 
+                const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y); 
                 if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
             }
             this.target = closest;
         }
         if (this.target) {
-            const targetAngle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+            const dx = this.target.x - this.x; const dy = this.target.y - this.y;
+            const targetAngle = Math.atan2(dy, dx);
             let angleDiff = targetAngle - this.angle;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2; while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
             if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad; else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
             this.angle += angleDiff; this.vx = Math.cos(this.angle) * this.speed; this.vy = Math.sin(this.angle) * this.speed;
         } 
         this.x += this.vx; this.y += this.vy;
+        
         for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i]; if (e.hp <= 0 || this.hitEnemies.has(e)) continue;
-            const distSq = (e.x - this.x)**2 + (e.y - this.y)**2; const hitDist = e.size + this.size;
-            if (distSq < hitDist * hitDist) {
+            let e = enemies[i];
+            if (e.hp <= 0 || this.hitEnemies.has(e)) continue;
+            const distSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
+            if (distSq < (e.size + this.size)*(e.size + this.size)) {
                 let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
                 e.hp -= actualDamage; this.hitEnemies.add(e);
                 let textColor = this.isSplit ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc') : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
                 damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
+                
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     for (let j = 0; j < this.stats.splitCount; j++) {
-                        let splitProj = new Projectile(this.x + (Math.random()-0.5)*20, this.y + (Math.random()-0.5)*20, null, this.stats, true);
-                        splitProj.hitEnemies.add(e); splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4; 
+                        let splitProj = new Projectile(this.x + (Math.random() - 0.5) * 20, this.y + (Math.random() - 0.5) * 20, null, this.stats, true);
+                        splitProj.hitEnemies.add(e); 
+                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4; 
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed; splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
                         projectiles.push(splitProj);
                     }
@@ -547,17 +567,19 @@ class Projectile {
 }
 
 class FrostEffect {
+    // ... 原本冰環邏輯 ...
     constructor(x, y, stats) {
-        this.x = x; this.y = y; this.maxRadius = stats.radius; this.radius = 0; this.duration = stats.duration; this.maxDuration = stats.duration; 
+        this.x = x; this.y = y; this.maxRadius = stats.radius; this.radius = 0;
+        this.duration = stats.duration; this.maxDuration = stats.duration; 
         this.damage = stats.damage; this.isSpecial = stats.isSpecial; this.processedEnemies = new Set(); 
     }
     update() {
-        if (this.radius < this.maxRadius) this.radius += 8; this.duration--; let elapsedFrames = this.maxDuration - this.duration;
+        if (this.radius < this.maxRadius) this.radius += 8; this.duration--;
+        let elapsedFrames = this.maxDuration - this.duration;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i]; if (e.hp <= 0) continue; 
-            const distSq = (e.x - this.x)**2 + (e.y - this.y)**2; 
-            if (distSq < this.radius * this.radius) {
-                e.slowMultiplier = (e.type === 'boss') ? 0.8 : 0.6; 
+            if ((e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y) < this.radius * this.radius) {
+                e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6; 
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e); e.hp -= this.damage;
                     damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
@@ -568,7 +590,7 @@ class FrostEffect {
                                 this.hitBossesThisCast.add(e); e.frostHitCount++;
                                 if (e.frostHitCount >= 3) { e.frozenTimer = 10; e.frostHitCount = 0; }
                             }
-                        } else e.frozenTimer = 10; 
+                        } else { e.frozenTimer = 10; }
                     }
                 }
                 if (elapsedFrames > 0 && elapsedFrames % 4 === 0) { e.hp -= 1; damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff')); }
@@ -577,148 +599,63 @@ class FrostEffect {
         return this.duration > 0;
     }
     draw() {
-        ctx.save(); ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration); ctx.strokeStyle = 'rgb(150, 200, 255)'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
-        ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('❄️', this.x, this.y); ctx.restore();
-    }
-}
-
-class Gem {
-    constructor(x, y) {
-        this.x = x; this.y = y; this.size = 5;
-    }
-    update() {
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const distSq = dx * dx + dy * dy; 
-        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
-        const hitDist = player.size + this.size;
-        if (distSq < hitDist * hitDist) {
-            player.exp++;
-            updateUI();
-            if (player.exp >= player.nextExp && player.level < 10) levelUp();
-            return false;
-        }
-        return true;
-    }
-    draw() {
-        ctx.fillStyle = '#4CAF50';
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
-    }
-}
-
-class HealDrop {
-    constructor(x, y) {
-        this.x = x; this.y = y; this.size = 5;
-    }
-    update() {
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
-        const hitDist = player.size + this.size;
-        if (distSq < hitDist * hitDist) {
-            player.hp = Math.min(player.maxHp, player.hp + 20);
-            return false; 
-        }
-        return true;
-    }
-    draw() {
-        ctx.fillStyle = '#FF5252'; 
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration);
+        ctx.strokeStyle = 'rgb(150, 200, 255)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('❄️', this.x, this.y);
+        ctx.restore();
     }
 }
 
 function fireSkill() {
     const s = player.skillStats;
-    
-    if (player.skill === 'summoner') {
-        let houndCount = minions.filter(m => m.type === 'hound').length;
-        if (houndCount < s.houndMax) {
-            s.currentHoundCooldown--;
-            if (s.currentHoundCooldown <= 0) {
-                minions.push(new Minion(player.x, player.y, 'hound'));
-                s.currentHoundCooldown = s.houndCooldown;
+    if (player.skill === 'summon') {
+        // 1. 自動補充獵犬
+        let houndCount = summons.filter(sum => sum.type === 'hound').length;
+        if (houndCount < 3) {
+            s.houndSpawnTimer++;
+            if (s.houndSpawnTimer >= 480) { // 8秒冷卻
+                summons.push(new Summon(player.x, player.y, 'hound'));
+                s.houndSpawnTimer = 0;
             }
+        } else {
+            s.houndSpawnTimer = 0;
         }
         
-        if (markedEnemy && markedEnemy.hp <= 0) markedEnemy = null;
-        if (!markedEnemy || enemies.indexOf(markedEnemy) === -1) {
-            let bestTarget = null;
-            let maxHP = -1;
+        // 2. 牽線邏輯
+        if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0) {
+            let bestTarget = null; let maxHpFound = -1;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 【限制】絕對不鎖定螢幕外的敵人
+                if (e.type === 'boss' || e.hp <= 0) continue; // 排除大魔王
+                // 必須在畫面內
                 if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-                if (e.type !== 'boss' && e.maxHp > maxHP) {
-                    maxHP = e.maxHp;
-                    bestTarget = e;
+                
+                if (e.maxHp > maxHpFound) {
+                    maxHpFound = e.maxHp; bestTarget = e;
                 }
             }
             if (bestTarget) {
-                markedEnemy = bestTarget;
-                if (markedEnemy.tauntedBy) {
-                    markedEnemy.tauntedBy.target = null;
-                    markedEnemy.tauntedBy = null;
-                }
-            }
-        }
-        
-        if (markedEnemy) {
-            // 【控制進度】6 秒控制完成 (60 幀 * 6 = 360，1/360 per frame)
-            markedEnemy.controlValue += markedEnemy.maxHp * (s.controlRate / 60);
-            
-            // 【更新】更粗更明顯的紫色雙層光束
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(player.x, player.y);
-            ctx.lineTo(markedEnemy.x, markedEnemy.y);
-            ctx.strokeStyle = 'rgba(156, 39, 176, 0.8)';
-            ctx.lineWidth = 5;
-            ctx.setLineDash([10, 10]);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.moveTo(player.x, player.y);
-            ctx.lineTo(markedEnemy.x, markedEnemy.y);
-            ctx.strokeStyle = 'rgba(224, 64, 251, 0.9)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([10, 10]);
-            ctx.lineDashOffset = 5; 
-            ctx.stroke();
-            ctx.restore();
-            
-            if (markedEnemy.controlValue >= markedEnemy.maxHp) {
-                minions.push(new Minion(markedEnemy.x, markedEnemy.y, 'converted', markedEnemy));
-                let index = enemies.indexOf(markedEnemy);
-                if (index !== -1) enemies.splice(index, 1);
-                markedEnemy = null;
+                s.currentTetherTarget = bestTarget;
+                tethers.push(new TetherEffect(bestTarget, s));
             }
         }
         return; 
     }
-    
+
     if (s.currentCooldown > 0) { s.currentCooldown--; return; }
     
     if (player.skill === 'missile') {
-        let initialTarget = null;
-        let minDistSq = Infinity;
+        let initialTarget = null; let minDistSq = Infinity;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             if (e.hp <= 0 || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-            const dx = e.x - player.x;
-            const dy = e.y - player.y;
-            const dSq = dx * dx + dy * dy; 
+            const dSq = (e.x - player.x)*(e.x - player.x) + (e.y - player.y)*(e.y - player.y); 
             if (dSq < minDistSq) { minDistSq = dSq; initialTarget = e; }
         }
-
         for (let i = 0; i < s.count; i++) {
-            let offsetX = (Math.random() - 0.5) * 50;
-            let offsetY = (Math.random() - 0.5) * 50;
-            projectiles.push(new Projectile(player.x + offsetX, player.y + offsetY, initialTarget, s, false));
+            projectiles.push(new Projectile(player.x + (Math.random() - 0.5) * 50, player.y + (Math.random() - 0.5) * 50, initialTarget, s, false));
         }
         s.currentCooldown = s.cooldown;
-        
     } else if (player.skill === 'frost') {
         effects.push(new FrostEffect(player.x, player.y, s));
         s.currentCooldown = s.cooldown;
@@ -731,104 +668,67 @@ function updateUI() {
 }
 
 function levelUp() {
-    joystick.active = false;
-    gameState = 'paused';
-    player.level++;
-    
+    joystick.active = false; gameState = 'paused'; player.level++;
     player.hp = Math.min(player.maxHp, player.hp + (player.maxHp / 6));
-    
-    player.exp = 0;
-    player.nextExp = Math.floor(player.nextExp * 1.5);
+    player.exp = 0; player.nextExp = Math.floor(player.nextExp * 1.5);
     updateUI();
     
     const screen = document.getElementById('upgrade-screen');
     const optionsDiv = document.getElementById('upgrade-options');
-    optionsDiv.innerHTML = '';
-    screen.classList.remove('hidden');
+    optionsDiv.innerHTML = ''; screen.classList.remove('hidden');
 
     const s = player.skillStats;
-
     if (player.level === 10) level10Frames = 0;
 
     if (player.level === 5) {
         document.getElementById('upgrade-title').innerText = "第 5 次進化：超級強化！";
-        let choice = s.specialUpgrade;
-        let btn = document.createElement('button');
-        btn.className = 'btn btn-upgrade btn-special';
-        btn.innerText = choice.desc;
-        btn.onclick = () => {
-            choice.apply(s);
-            resumeGameAfterUpgrade();
-        };
+        let btn = document.createElement('button'); btn.className = 'btn btn-upgrade btn-special'; btn.innerText = s.specialUpgrade.desc;
+        btn.onclick = () => { s.specialUpgrade.apply(s); resumeGameAfterUpgrade(); };
         optionsDiv.appendChild(btn);
-        
     } else if (player.level === 10) {
         document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(將突破極限，獲得所有能力)";
-        let choices = [...s.upgrades];
-        let clickedCount = 0;
+        let choices = [...s.upgrades]; let clickedCount = 0;
         choices.forEach(choice => {
-            let btn = document.createElement('button');
-            btn.className = 'btn btn-upgrade btn-special';
-            btn.innerText = choice.desc;
+            let btn = document.createElement('button'); btn.className = 'btn btn-upgrade btn-special'; btn.innerText = choice.desc;
             btn.onclick = () => {
-                choice.apply(s);
-                btn.classList.add('hidden');
-                clickedCount++;
+                choice.apply(s); btn.classList.add('hidden'); clickedCount++;
                 if (clickedCount === choices.length) resumeGameAfterUpgrade(); 
             };
             optionsDiv.appendChild(btn);
         });
-        
     } else {
         document.getElementById('upgrade-title').innerText = "技能強化！";
-        
         let available = [...s.upgrades].filter(choice => {
             if (s.id === 'missile' && choice.id === 'u2' && s.cooldown <= 10) return false;
             if (s.id === 'frost' && choice.id === 'u2' && s.cooldown <= 60) return false;
             return true;
         });
-        
         available.sort(() => 0.5 - Math.random());
-        let choices = available.slice(0, 2);
-        
-        choices.forEach(choice => {
-            let btn = document.createElement('button');
-            btn.className = 'btn btn-upgrade';
-            if (player.skill === 'summoner') btn.style.background = '#9C27B0';
-            btn.innerText = choice.desc;
-            btn.onclick = () => {
-                choice.apply(s);
-                resumeGameAfterUpgrade();
-            };
+        available.slice(0, 2).forEach(choice => {
+            let btn = document.createElement('button'); btn.className = 'btn btn-upgrade'; btn.innerText = choice.desc;
+            btn.onclick = () => { choice.apply(s); resumeGameAfterUpgrade(); };
             optionsDiv.appendChild(btn);
         });
     }
 }
 
 function resumeGameAfterUpgrade() {
-    document.getElementById('upgrade-screen').classList.add('hidden');
-    gameState = 'playing';
-    
+    document.getElementById('upgrade-screen').classList.add('hidden'); gameState = 'playing';
     if (player.level === 10) {
-        document.getElementById('status').innerText = "最終波！肅清所有怪物以獲勝！";
-        document.getElementById('status').style.color = "#FFEB3B";
+        document.getElementById('status').innerText = "最終波！肅清所有怪物以獲勝！"; document.getElementById('status').style.color = "#FFEB3B";
         enemies.push(new Enemy(1 + player.level * 0.3, 'boss'));
     }
 }
 
 function gameOver(isWin) {
-    joystick.active = false;
-    gameState = 'gameover';
-    document.getElementById('game-over-screen').classList.remove('hidden');
+    joystick.active = false; gameState = 'gameover'; document.getElementById('game-over-screen').classList.remove('hidden');
     document.getElementById('end-title').innerText = isWin ? "挑戰成功！你肅清了戰場！" : "挑戰失敗！";
     document.getElementById('end-title').style.color = isWin ? "#4CAF50" : "#F44336";
 }
 
 function drawConfetti() {
     if (confettis.length === 0) {
-        for (let i = 0; i < 150; i++) {
-            confettis.push({ x: Math.random() * canvas.width, y: Math.random() * -canvas.height, vx: (Math.random() - 0.5) * 4, vy: Math.random() * 3 + 2, size: Math.random() * 8 + 6, color: `hsl(${Math.random() * 360}, 100%, 50%)`, angle: Math.random() * 360, spin: (Math.random() - 0.5) * 10 });
-        }
+        for (let i = 0; i < 150; i++) confettis.push({ x: Math.random() * canvas.width, y: Math.random() * -canvas.height, vx: (Math.random() - 0.5) * 4, vy: Math.random() * 3 + 2, size: Math.random() * 8 + 6, color: `hsl(${Math.random() * 360}, 100%, 50%)`, angle: Math.random() * 360, spin: (Math.random() - 0.5) * 10 });
     }
     confettis.forEach(c => {
         c.x += c.vx; c.y += c.vy; c.angle += c.spin;
@@ -849,28 +749,16 @@ function gameLoop() {
     if (gameState === 'gameover') {
         if (player.hp > 0) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            gems.forEach(g => g.draw());
-            healDrops.forEach(h => h.draw()); 
-            projectiles.forEach(p => p.draw());
-            effects.forEach(e => e.draw());
-            enemies.forEach(e => e.draw());
-            minions.forEach(m => m.draw());
-            damageTexts.forEach(dt => dt.draw());
-            
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🧙', player.x, player.y);
-            
+            gems.forEach(g => g.draw()); healDrops.forEach(h => h.draw()); projectiles.forEach(p => p.draw()); effects.forEach(e => e.draw()); enemies.forEach(e => e.draw());
+            tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); damageTexts.forEach(dt => dt.draw());
+            ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🧙', player.x, player.y);
             drawConfetti(); 
         }
-        requestAnimationFrame(gameLoop);
-        return;
+        requestAnimationFrame(gameLoop); return;
     }
 
     if (gameState !== 'playing') {
-        if(gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop);
-        return;
+        if(gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop); return;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -878,27 +766,22 @@ function gameLoop() {
     let moveX = 0; let moveY = 0;
     if (keys['a'] || keys['arrowleft']) moveX -= 1; if (keys['d'] || keys['arrowright']) moveX += 1;
     if (keys['w'] || keys['arrowup']) moveY -= 1; if (keys['s'] || keys['arrowdown']) moveY += 1;
-
     if (joystick.active) {
         const jx = joystick.currentX - joystick.startX; const jy = joystick.currentY - joystick.startY; const dist = Math.hypot(jx, jy);
         if (dist > 5) { moveX = jx / dist; moveY = jy / dist; }
     }
-
     if (moveX !== 0 || moveY !== 0) {
-        const dist = Math.hypot(moveX, moveY);
-        const nx = (moveX / dist) * player.speed; const ny = (moveY / dist) * player.speed;
+        const dist = Math.hypot(moveX, moveY); const nx = (moveX / dist) * player.speed; const ny = (moveY / dist) * player.speed;
         if (player.x + nx > player.size && player.x + nx < canvas.width - player.size) player.x += nx;
         if (player.y + ny > player.size && player.y + ny < canvas.height - player.size) player.y += ny;
     }
 
     fireSkill();
-
     frameCount++;
     
     let stopSpawning = false;
     if (player.level >= 10) {
-        level10Frames += bossIsDead ? 2 : 1; 
-        stopSpawning = level10Frames >= 2400;
+        level10Frames += bossIsDead ? 2 : 1; stopSpawning = level10Frames >= 2400;
         let spawnRate = bossIsDead ? 8 : 16;
         if (!stopSpawning) {
             if (frameCount % spawnRate === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'normal'));
@@ -910,62 +793,51 @@ function gameLoop() {
         if (player.level >= 5 && frameCount % (spawnRate * 4) === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'mini'));
     }
 
-    if (gems.length > 200) gems.shift();
-    if (healDrops.length > 50) healDrops.shift();
+    if (gems.length > 200) gems.shift(); if (healDrops.length > 50) healDrops.shift();
 
     for (let i = gems.length - 1; i >= 0; i--) if (!gems[i].update()) gems.splice(i, 1);
     for (let i = healDrops.length - 1; i >= 0; i--) if (!healDrops[i].update()) healDrops.splice(i, 1);
     for (let i = projectiles.length - 1; i >= 0; i--) if (!projectiles[i].update()) projectiles.splice(i, 1);
     for (let i = effects.length - 1; i >= 0; i--) if (!effects[i].update()) effects.splice(i, 1);
     for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
-    for (let i = minions.length - 1; i >= 0; i--) if (!minions[i].update()) minions.splice(i, 1);
+    
+    // 更新召喚物與牽線
+    for (let i = summons.length - 1; i >= 0; i--) {
+        if (!summons[i].update()) {
+            // 如果召喚物死亡，解除怪物對它的嘲諷
+            for(let e of enemies) if (e.tauntedBy === summons[i]) e.tauntedBy = null;
+            summons.splice(i, 1);
+        }
+    }
+    for (let i = tethers.length - 1; i >= 0; i--) if (!tethers[i].update()) tethers.splice(i, 1);
 
-    // 繪製順序修正：先畫標記緩速圈與怪物，再畫毒霧與召喚物，最後畫特效與數字
-    enemies.forEach(e => e.draw());
-    minions.forEach(m => m.draw()); 
-    gems.forEach(g => g.draw());
-    healDrops.forEach(h => h.draw()); 
-    projectiles.forEach(p => p.draw());
-    effects.forEach(e => e.draw());
+    // 繪製
+    gems.forEach(g => g.draw()); healDrops.forEach(h => h.draw()); projectiles.forEach(p => p.draw()); effects.forEach(e => e.draw());
+    tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); // 繪製牽線與召喚物
 
     for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].update();
-        
+        enemies[i].update(); enemies[i].draw();
         if (enemies[i].hp <= 0) {
             if (enemies[i].type === 'boss') bossIsDead = true;
-            if (enemies[i] === markedEnemy) markedEnemy = null; 
-
             let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
-            for (let g = 0; g < gemCount; g++) {
-                gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
-            }
-            
+            for (let g = 0; g < gemCount; g++) gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
             if (enemies[i].type === 'normal') {
                 normalKillCount++;
                 if (normalKillCount >= 10) { healDrops.push(new HealDrop(enemies[i].x, enemies[i].y)); normalKillCount = 0; }
             }
-
             enemies.splice(i, 1);
         }
     }
     
     damageTexts.forEach(dt => dt.draw());
 
-    ctx.font = '30px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🧙', player.x, player.y);
-    
-    ctx.fillStyle = '#F44336';
-    ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
-    ctx.fillStyle = '#4CAF50';
-    ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
+    ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🧙', player.x, player.y);
+    ctx.fillStyle = '#F44336'; ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
+    ctx.fillStyle = '#4CAF50'; ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
 
     drawJoystick();
 
-    if (player.level >= 10 && stopSpawning && enemies.length === 0) {
-        gameOver(true);
-    }
+    if (player.level >= 10 && stopSpawning && enemies.length === 0) gameOver(true);
 
     requestAnimationFrame(gameLoop);
 }
