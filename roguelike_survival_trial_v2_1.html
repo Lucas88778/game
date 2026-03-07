@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.9 (解除限制與除蟲版)</title>
+<title>Roguelike 生存：極限試煉 v7.11 (霸體魔王版)</title>
 <style>
     body {
         margin: 0;
@@ -171,7 +171,7 @@
     </div>
 
     <div id="upgrade-screen" class="panel hidden">
-        <h2 id="upgrade-title">技能強化！</h2>
+        <h2 id="upgrade-title" style="white-space: pre-line;">技能強化！</h2>
         <div id="upgrade-options"></div>
     </div>
 
@@ -227,6 +227,15 @@ const joystick = {
     currentY: 0,
     maxRadius: 50
 };
+
+// 絕對公平的 Fisher-Yates 洗牌演算法
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
 
 const skillDefinitions = {
     missile: {
@@ -296,10 +305,9 @@ const skillDefinitions = {
 function recalcSummonStats(s) {
     const a = Math.min(s.pathTiers.a, 8);
     const b = Math.min(s.pathTiers.b, 8);
-    // C 路線不再限制上限，徹底解除封印！
     const c = s.pathTiers.c; 
 
-    // 階段性被動機制解算 (依據玩家進化等級)
+    // 新版階段性被動機制解算 (1/5獵犬上限, 2獵犬加速, 3/7青蛙上限, 4青蛙加速)
     let passiveHounds = 0;
     let passiveHoundSpawnRed = 0;
     let passiveFrogs = 0;
@@ -309,31 +317,29 @@ function recalcSummonStats(s) {
     if (player.level >= 2) passiveHoundSpawnRed += 30;
     if (player.level >= 3) passiveFrogs += 1;
     if (player.level >= 4) passiveFrogConvRed += 45;
-    if (player.level >= 5) passiveHounds += 1;
-    if (player.level >= 6) passiveHoundSpawnRed += 30;
+    if (player.level >= 6) passiveHounds += 1;
     if (player.level >= 7) passiveFrogs += 1;
-    if (player.level >= 8) passiveFrogConvRed += 45;
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
     
-    // 基礎300f，扣除被動與C路線加速 (設底線防呆，避免變負數)
-    s.spawnInterval = Math.max(30, 300 - passiveHoundSpawnRed - (c * 20)); 
-    s.tetherDuration = Math.max(60, 480 - passiveFrogConvRed - (c * 30)); 
+    // C路線不鎖定最低時間，允許突破 0 進入極限暴走
+    s.spawnInterval = 300 - passiveHoundSpawnRed - (c * 25); 
+    s.tetherDuration = 480 - passiveFrogConvRed - (c * 35); 
 
-    // 獵犬：閃電刺客 (高跑速、擊殺爆發跑速)
-    s.houndHp = 150 + (a * 15);
+    // 獵犬：閃電刺客
+    s.houndHp = 120 + (a * 15);
     s.houndAtk = 12 + (a * 6);
     s.houndAttackInterval = 30; 
-    s.houndBaseSpeed = 4.0 + (a * 0.5); 
+    s.houndBaseSpeed = 3.5 + (a * 0.25); 
     
-    // 青蛙：重裝法坦 (超高血量、大範圍毒圈)
-    s.frogHp = 180 + (b * 50);
+    // 青蛙：重裝法坦
+    s.frogHp = 150 + (b * 50);
     s.frogAtk = 6 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
 
-    s.poisonRadius = 90 + (b * 5); // 每次升級毒圈半徑+5
+    s.poisonRadius = 90 + (b * 5); 
     s.poisonInterval = 20; 
     s.poisonDamage = 3 + (b * 2); 
 
@@ -355,7 +361,6 @@ function refreshExistingSummons() {
 
 function applySummonUpgrade(pathKey) {
     const s = player.skillStats;
-    // 只有 a 和 b 有 8 階限制
     if (pathKey !== 'c' && s.pathTiers[pathKey] >= 8) return false;
     s.pathTiers[pathKey] += 1;
     recalcSummonStats(s);
@@ -570,7 +575,8 @@ class Enemy {
         let targetHitDist = player.size + this.size;
         let targetObj = player;
 
-        if (this.tauntedBy && this.tauntedBy.hp > 0) {
+        // 大魔王(Boss)無視嘲諷，永遠鎖定主角
+        if (this.type !== 'boss' && this.tauntedBy && this.tauntedBy.hp > 0) {
             let sHitDist = this.size + this.tauntedBy.size;
             let sDx = this.tauntedBy.x - this.x;
             let sDy = this.tauntedBy.y - this.y;
@@ -600,6 +606,7 @@ class Enemy {
 
         this.slowMultiplier = 1.0;
 
+        // 對主要目標造成傷害
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
@@ -608,6 +615,22 @@ class Enemy {
                 const reduction = targetObj.damageReduction || 0;
                 const actualDamage = 0.5 * (1 - reduction);
                 targetObj.hp -= actualDamage;
+            }
+        }
+
+        // 大魔王(Boss)碰撞踐踏：對所有碰到他的召喚物造成傷害
+        if (this.type === 'boss') {
+            for (let i = 0; i < summons.length; i++) {
+                let sum = summons[i];
+                if (sum.isSpawning || sum.hp <= 0) continue;
+                let sx = sum.x - this.x;
+                let sy = sum.y - this.y;
+                let sDistSq = sx * sx + sy * sy;
+                let sHitDist = this.size + sum.size;
+                if (sDistSq < sHitDist * sHitDist) {
+                    const reduction = sum.damageReduction || 0;
+                    sum.hp -= 0.5 * (1 - reduction);
+                }
             }
         }
     }
@@ -658,7 +681,6 @@ class Summon {
         this.attackCooldown = 0;
         this.poisonTimer = 0;
         
-        // 獵犬擊殺加速狀態
         this.killSpeedBuffTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
@@ -709,7 +731,6 @@ class Summon {
                 this.isSpawning = false;
                 if (this.sourceEnemy) {
                     this.sourceEnemy.hp = 0;
-                    // 【Bug修復關鍵】解除敵人的隱形漸隱狀態，讓主迴圈可以順利將其移除！
                     this.sourceEnemy.isFading = false;
                 }
             }
@@ -718,7 +739,7 @@ class Summon {
 
         let currentSpeed = this.baseSpeed;
         if (this.killSpeedBuffTimer > 0) {
-            currentSpeed += 1.0;
+            currentSpeed += 0.5; // 擊殺獲得 +0.5 跑速
             this.killSpeedBuffTimer--;
         }
 
@@ -845,7 +866,6 @@ class Summon {
                         this.type === 'hound' ? '#FF9800' : '#8BC34A'
                     ));
                     
-                    // 獵犬擊殺加速判斷
                     if (this.target.hp <= 0 && this.type === 'hound') {
                         this.killSpeedBuffTimer = 60;
                     }
@@ -891,7 +911,6 @@ class Summon {
                 ctx.fill();
             }
 
-            // 獵犬擊殺加速殘影特效
             if (this.type === 'hound' && this.killSpeedBuffTimer > 0) {
                 ctx.save();
                 ctx.globalAlpha = 0.3;
@@ -1365,8 +1384,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！";
-            // 只有 A 和 B 限制 8 階，C 路線無極限
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）";
             const pathKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
@@ -1392,7 +1410,9 @@ function levelUp() {
             document.getElementById('upgrade-title').innerText = "技能強化！";
 
             const availableKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
-            availableKeys.sort(() => 0.5 - Math.random());
+            
+            shuffleArray(availableKeys);
+            
             const selected = availableKeys.slice(0, Math.min(2, availableKeys.length));
 
             selected.forEach(key => {
@@ -1411,7 +1431,7 @@ function levelUp() {
     }
 
     if (player.level === 10) {
-        document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！";
+        document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）";
         let choices = [...s.upgrades];
         let clickedCount = 0;
         choices.forEach(choice => {
@@ -1433,7 +1453,9 @@ function levelUp() {
             if (s.id === 'frost' && choice.id === 'u2' && s.cooldown <= 60) return false;
             return true;
         });
-        available.sort(() => 0.5 - Math.random());
+        
+        shuffleArray(available);
+        
         available.slice(0, 2).forEach(choice => {
             let btn = document.createElement('button');
             btn.className = 'btn btn-upgrade';
