@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.1 (極簡線性平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.3 (刺客獵犬版)</title>
 <style>
     body {
         margin: 0;
@@ -73,16 +73,14 @@
         width: 100%;
         margin: 10px 0;
         display: block;
-        white-space: pre-line;
-        line-height: 1.35;
         font-weight: bold;
-        font-size: 18px;
+        font-size: 20px;
+        padding: 15px;
     }
     .btn-upgrade:hover { background: #1976D2; }
 
     .btn-special {
         background: #ff9800;
-        font-weight: bold;
         text-shadow: 1px 1px 2px black;
     }
     .btn-special:hover { background: #e68a00; }
@@ -250,7 +248,7 @@ const skillDefinitions = {
         ],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：魔力爆發 (攻擊力提升2.5倍)',
+            desc: '超級強化：魔力爆發',
             apply: (s) => { s.damage *= 2.5; s.isSpecial = true; }
         }
     },
@@ -270,7 +268,7 @@ const skillDefinitions = {
         ],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：絕對零度 (命中瞬間結凍)',
+            desc: '超級強化：絕對零度',
             apply: (s) => s.isSpecial = true
         }
     },
@@ -285,7 +283,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖範圍毒圈，所有召喚物承受接觸傷害 -40%',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖範圍毒圈，全召喚物承受接觸傷害 -40%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -303,22 +301,24 @@ function recalcSummonStats(s) {
     s.maxHounds = 1 + c;
     s.maxFrogs = 3 + c;
     
-    s.spawnInterval = Math.max(60, 360 - (c * 15));
-    s.tetherDuration = Math.max(120, 480 - (c * 30));
+    s.spawnInterval = Math.max(60, 360 - (c * 20)); 
+    s.tetherDuration = Math.max(120, 480 - (c * 30)); 
 
-    s.houndHp = 120 + (a * 25);
-    s.houndAtk = 6 + (a * 3);
+    // 獵犬：刺客/戰士 (高ATK, 跑速疊加, HP 適中確保會死)
+    s.houndHp = 180 + (a * 15);
+    s.houndAtk = 12 + (a * 6);
     s.houndAttackInterval = 30; 
-    s.houndBaseSpeed = 3.45;
+    s.houndBaseSpeed = 3.45 + (a * 0.2); // 每次升級 +0.2 移動速度
     
-    s.frogHp = 150 + (b * 25);
-    s.frogAtk = 10 + (b * 3);
-    s.frogAttackInterval = 29; 
+    // 青蛙：坦克/群傷 (高HP, 但會被海死, 毒增傷)
+    s.frogHp = 250 + (b * 40);
+    s.frogAtk = 6 + (b * 2);
+    s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
 
     s.poisonRadius = 90; 
     s.poisonInterval = 20; 
-    s.poisonDamage = 3; 
+    s.poisonDamage = 3 + (b * 2); 
 
     s.summonDamageReduction = s.isSpecial ? 0.40 : 0;
 }
@@ -346,6 +346,7 @@ function applySummonUpgrade(pathKey) {
     return true;
 }
 
+// 極簡化文字
 function getSummonUpgradeLabel(pathKey) {
     if (pathKey === 'a') return '🐕獵犬強化';
     if (pathKey === 'b') return '🐸 青蛙強化';
@@ -1311,7 +1312,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(尚未達到極限的能力可全部取得)";
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！";
             const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
@@ -1356,7 +1357,7 @@ function levelUp() {
     }
 
     if (player.level === 10) {
-        document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(將突破極限，獲得所有能力)";
+        document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！";
         let choices = [...s.upgrades];
         let clickedCount = 0;
         choices.forEach(choice => {
