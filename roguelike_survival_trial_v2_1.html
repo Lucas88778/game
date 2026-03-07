@@ -313,8 +313,14 @@ class Enemy {
         this.fearTimer = 0;    
         this.fearSourceX = 0;
         this.fearSourceY = 0;
+        
+        this.isFading = false;
+        this.fadeDuration = 45;
+        this.fadeTimer = 0;
     }
     update() {
+        if (this.isFading) return; 
+
         if (this.fearTimer > 0) {
             this.fearTimer--;
             const dx = this.x - this.fearSourceX;
@@ -376,6 +382,11 @@ class Enemy {
         }
     }
     draw() {
+        ctx.save();
+        if (this.isFading) {
+            ctx.globalAlpha = Math.max(0, 1 - (this.fadeTimer / this.fadeDuration));
+        }
+
         if (this.frozenTimer > 0) {
             ctx.fillStyle = 'rgba(0, 255, 255, 0.4)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2); ctx.fill();
         }
@@ -386,35 +397,38 @@ class Enemy {
         } else if (this.type === 'boss' && this.frostHitCount > 0) {
             ctx.font = `16px Arial`; let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️'; ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
+        ctx.restore();
     }
 }
 
 class Summon {
-    constructor(x, y, type) {
+    constructor(x, y, type, sourceEnemy = null) {
         this.x = x; this.y = y;
         this.type = type; 
         this.size = 15;
         const s = player.skillStats;
         
+        this.isSpawning = true;
+        this.spawnTimer = 0;
+        this.spawnDuration = 45; 
+        this.sourceEnemy = sourceEnemy; 
+
         if (type === 'hound') {
-            this.maxHp = 190 + (s ? s.summonBonusHp : 0);
+            this.maxHp = 150 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 12 + (s ? s.summonBonusAtk : 0);
+            this.atk = 8 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐕';
-            this.isSpawning = true;
-            this.spawnTimer = 0;
-            this.spawnDuration = 45; 
         } else if (type === 'frog') {
-            this.maxHp = 250 + (s ? s.summonBonusHp : 0);
+            this.maxHp = 210 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 15 + (s ? s.summonBonusAtk : 0);
+            this.atk = 10 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐸';
-            this.isSpawning = false;
         }
         
         this.target = null;
+        this.targetOffset = { x: 0, y: 0 };
         this.attackCooldown = 0;
         this.poisonTimer = 0;
     }
@@ -422,8 +436,14 @@ class Summon {
     update() {
         if (this.isSpawning) {
             this.spawnTimer++;
+            if (this.sourceEnemy) {
+                this.sourceEnemy.fadeTimer = this.spawnTimer;
+            }
             if (this.spawnTimer >= this.spawnDuration) {
                 this.isSpawning = false;
+                if (this.sourceEnemy) {
+                    this.sourceEnemy.hp = 0; 
+                }
             }
             return true; 
         }
@@ -434,7 +454,7 @@ class Summon {
                 this.poisonTimer = 0;
                 for (let i = 0; i < enemies.length; i++) {
                     let e = enemies[i];
-                    if (e.hp <= 0) continue;
+                    if (e.hp <= 0 || e.isFading) continue;
                     const dx = e.x - this.x; const dy = e.y - this.y;
                     if (dx*dx + dy*dy <= 80*80) { 
                         e.hp -= 2; 
@@ -445,35 +465,70 @@ class Summon {
         }
 
         if (this.target && player.skillStats && this.target === player.skillStats.currentTetherTarget) {
-            this.target.tauntedBy = null;
+            if (this.target.tauntedBy === this) this.target.tauntedBy = null;
             this.target = null;
         }
 
-        if (!this.target || this.target.hp <= 0) {
+        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
             this.target = null;
-            let closest = null; let minDistSq = Infinity;
+            let freeEnemies = [];
+            let engagedEnemies = [];
+            
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
                 let isTethered = player.skillStats && player.skillStats.currentTetherTarget === e;
 
-                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m || isTethered) continue;
+                if (e.hp <= 0 || e.isFading || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m || isTethered) continue;
                 
-                const dx = e.x - this.x; const dy = e.y - this.y;
-                const dSq = dx * dx + dy * dy;
-                if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
+                let targetingCount = summons.filter(s => s.target === e).length;
+                
+                if (targetingCount === 0) {
+                    freeEnemies.push(e);
+                } else {
+                    engagedEnemies.push({enemy: e, count: targetingCount});
+                }
             }
-            if (closest) {
-                this.target = closest;
-                closest.tauntedBy = this; 
+            
+            let closest = null; 
+            let minDistSq = Infinity;
+            
+            if (freeEnemies.length > 0) {
+                for (let e of freeEnemies) {
+                    const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
+                    if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
+                }
+                if (closest) {
+                    this.target = closest;
+                    closest.tauntedBy = this; 
+                    this.targetOffset = { x: (this.size + closest.size) * 0.75, y: 0 };
+                }
+            } 
+            else if (engagedEnemies.length > 0) {
+                for (let item of engagedEnemies) {
+                    let e = item.enemy;
+                    const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
+                    if (dSq < minDistSq) { minDistSq = dSq; closest = item; }
+                }
+                if (closest) {
+                    this.target = closest.enemy;
+                    let c = closest.count;
+                    let hitDist = this.size + this.target.size;
+                    let yOff = 0;
+                    
+                    if (c === 1) yOff = -hitDist * 0.8;
+                    else if (c === 2) yOff = hitDist * 0.8;
+                    else if (c === 3) yOff = -hitDist * 1.6;
+                    else if (c === 4) yOff = hitDist * 1.6;
+                    
+                    this.targetOffset = { x: hitDist * 0.75, y: yOff };
+                }
             }
         }
 
         if (this.target) {
-            const hitDist = this.size + this.target.size;
-            
-            const idealX = this.target.x + hitDist * 0.75;
-            const idealY = this.target.y;
+            const idealX = this.target.x + this.targetOffset.x;
+            const idealY = this.target.y + this.targetOffset.y;
             
             const dx = idealX - this.x; 
             const dy = idealY - this.y;
@@ -490,7 +545,9 @@ class Summon {
             if (this.attackCooldown <= 0) {
                 const actualDx = this.target.x - this.x;
                 const actualDy = this.target.y - this.y;
-                if (actualDx * actualDx + actualDy * actualDy < (hitDist * 1.2) * (hitDist * 1.2)) {
+                const hitDist = this.size + this.target.size;
+                
+                if (actualDx * actualDx + actualDy * actualDy < (hitDist * 2.2) * (hitDist * 2.2)) {
                     this.target.hp -= this.atk;
                     damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, '#FF9800'));
                     this.attackCooldown = 30; 
@@ -541,7 +598,7 @@ class TetherEffect {
         this.pulseTimer = 0; 
     }
     update() {
-        if (!this.target || this.target.hp <= 0) {
+        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
             this.convertToFrog(); return false;
         }
         
@@ -553,7 +610,7 @@ class TetherEffect {
 
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                if (e === this.target || e.hp <= 0) continue;
+                if (e === this.target || e.hp <= 0 || e.isFading) continue;
                 const dx = e.x - this.target.x; const dy = e.y - this.target.y;
                 if (dx*dx + dy*dy <= this.stats.fearRadius * this.stats.fearRadius) {
                     e.fearTimer = 60; 
@@ -566,14 +623,13 @@ class TetherEffect {
         
         this.duration++;
         if (this.duration >= this.maxDuration) {
-            this.target.hp = 0; 
             this.convertToFrog(); return false;
         }
         return true;
     }
     
     convertToFrog() {
-        if (!this.target) return;
+        if (!this.target || this.target.isFading) return;
         effects.push(new TransformPoof(this.target.x, this.target.y));
         
         let frogCount = summons.filter(s => s.type === 'frog').length;
@@ -586,12 +642,16 @@ class TetherEffect {
             }
         }
 
-        summons.push(new Summon(this.target.x, this.target.y, 'frog'));
+        this.target.isFading = true;
+        this.target.fadeDuration = 45;
+        this.target.fadeTimer = 0;
+
+        summons.push(new Summon(this.target.x, this.target.y, 'frog', this.target));
         player.skillStats.currentTetherTarget = null; 
     }
     
     draw() {
-        if (!this.target) return;
+        if (!this.target || this.target.isFading) return;
         ctx.save();
         ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(player.x, player.y); ctx.lineTo(this.target.x, this.target.y);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
@@ -645,12 +705,12 @@ class Projectile {
     }
     update() {
         if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
-        if (!this.target || this.target.hp <= 0) {
+        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
-                if (e.hp <= 0 || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+                if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
                 const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y); 
                 if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
             }
@@ -668,7 +728,7 @@ class Projectile {
         
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
-            if (e.hp <= 0 || this.hitEnemies.has(e)) continue;
+            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
             const distSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
             if (distSq < (e.size + this.size)*(e.size + this.size)) {
                 let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
@@ -706,7 +766,7 @@ class FrostEffect {
         if (this.radius < this.maxRadius) this.radius += 8; this.duration--;
         let elapsedFrames = this.maxDuration - this.duration;
         for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i]; if (e.hp <= 0) continue; 
+            let e = enemies[i]; if (e.hp <= 0 || e.isFading) continue; 
             if ((e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y) < this.radius * this.radius) {
                 e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6; 
                 if (!this.processedEnemies.has(e)) {
@@ -741,7 +801,7 @@ function fireSkill() {
         let houndCount = summons.filter(sum => sum.type === 'hound').length;
         if (houndCount < 5) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= 300) { 
+            if (s.houndSpawnTimer >= 210) { 
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
@@ -749,12 +809,12 @@ function fireSkill() {
             s.houndSpawnTimer = 0;
         }
         
-        if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0) {
+        if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0 || s.currentTetherTarget.isFading) {
             let bestTarget = null; let maxHpFound = -1;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
-                if (e.type === 'boss' || e.hp <= 0) continue; 
+                if (e.type === 'boss' || e.hp <= 0 || e.isFading) continue; 
                 if (e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
                 
                 if (e.maxHp > maxHpFound) {
@@ -776,7 +836,7 @@ function fireSkill() {
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             const m = e.size + 10;
-            if (e.hp <= 0 || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+            if (e.hp <= 0 || e.isFading || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
             const dSq = (e.x - player.x)*(e.x - player.x) + (e.y - player.y)*(e.y - player.y); 
             if (dSq < minDistSq) { minDistSq = dSq; initialTarget = e; }
         }
@@ -931,7 +991,7 @@ function gameLoop() {
     
     for (let i = summons.length - 1; i >= 0; i--) {
         if (!summons[i].update()) {
-            for(let e of enemies) if (e.tauntedBy === summons[i]) e.tauntedBy = null;
+            if(summons[i].target && summons[i].target.tauntedBy === summons[i]) summons[i].target.tauntedBy = null;
             summons.splice(i, 1);
         }
     }
@@ -942,7 +1002,7 @@ function gameLoop() {
 
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update(); enemies[i].draw();
-        if (enemies[i].hp <= 0) {
+        if (enemies[i].hp <= 0 && !enemies[i].isFading) {
             if (enemies[i].type === 'boss') bossIsDead = true;
             let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
             for (let g = 0; g < gemCount; g++) gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
