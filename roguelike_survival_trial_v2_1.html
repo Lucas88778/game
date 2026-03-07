@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.0 (線性召喚重製版)</title>
+<title>Roguelike 生存：極限試煉 v7.1 (極簡線性平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -75,6 +75,8 @@
         display: block;
         white-space: pre-line;
         line-height: 1.35;
+        font-weight: bold;
+        font-size: 18px;
     }
     .btn-upgrade:hover { background: #1976D2; }
 
@@ -280,15 +282,10 @@ const skillDefinitions = {
         houndSpawnTimer: 0,
         tetherSlow: 0.15,
         pathTiers: { a: 0, b: 0, c: 0 },
-        pathNames: {
-            a: '🐕獵犬強化',
-            b: '🐸青蛙強化',
-            c: '施法+上限+毒強化'
-        },
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖大範圍毒霧與持續毒傷，所有召喚物承受接觸傷害 -40%',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖範圍毒圈，所有召喚物承受接觸傷害 -40%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -298,33 +295,30 @@ const skillDefinitions = {
     }
 };
 
-// 線性計算邏輯
 function recalcSummonStats(s) {
     const a = Math.min(s.pathTiers.a, 8);
     const b = Math.min(s.pathTiers.b, 8);
     const c = Math.min(s.pathTiers.c, 8);
 
-    s.maxHounds = 3 + c;
-    s.maxFrogs = 4 + c;
+    s.maxHounds = 1 + c;
+    s.maxFrogs = 3 + c;
     
-    s.spawnInterval = Math.max(60, 240 - (c * 15));
-    s.tetherDuration = Math.max(120, 360 - (c * 30));
+    s.spawnInterval = Math.max(60, 360 - (c * 15));
+    s.tetherDuration = Math.max(120, 480 - (c * 30));
 
     s.houndHp = 120 + (a * 25);
     s.houndAtk = 6 + (a * 3);
-    s.houndAttackInterval = 30; // 攻速固定
+    s.houndAttackInterval = 30; 
     s.houndBaseSpeed = 3.45;
     
-    s.frogHp = 150 + (b * 35);
-    s.frogAtk = 10 + (b * 5);
-    s.frogAttackInterval = 29; // 攻速固定
+    s.frogHp = 150 + (b * 25);
+    s.frogAtk = 10 + (b * 3);
+    s.frogAttackInterval = 29; 
     s.frogBaseSpeed = 3.35;
 
-    s.poisonRadius = 90; // 統一半徑
+    s.poisonRadius = 90; 
     s.poisonInterval = 20; 
-    s.poisonDamage = 3 + (c * 1);
-    s.explosionDamage = 12 + (c * 4);
-    s.poisonDoTDamage = 2 + (c * 1); // 離開毒圈後的 DoT 傷害
+    s.poisonDamage = 3; 
 
     s.summonDamageReduction = s.isSpecial ? 0.40 : 0;
 }
@@ -353,30 +347,10 @@ function applySummonUpgrade(pathKey) {
 }
 
 function getSummonUpgradeLabel(pathKey) {
-    const s = player.skillStats;
-    const currentTier = s.pathTiers[pathKey];
-    if (currentTier >= 8) return null;
-    const nextTier = currentTier + 1;
-    const pathName = s.pathNames[pathKey];
-
-    if (pathKey === 'a') {
-        return `${pathName} [${currentTier}→${nextTier}]\n🐕 HP +25 / 攻擊 +3\n現存召喚物回復 25% 最大生命`;
-    }
-
-    if (pathKey === 'b') {
-        return `${pathName} [${currentTier}→${nextTier}]\n🐸 HP +35 / 攻擊 +5\n現存召喚物回復 25% 最大生命`;
-    }
-
-    if (pathKey === 'c') {
-        let text = `${pathName} [${currentTier}→${nextTier}]\n🐕與🐸 上限皆 +1\n施法牽引 -30f / 召喚 -15f\n毒爆傷害 +4`;
-        if (s.isSpecial) {
-            text += `\n毒圈傷害 +1 / 毒素 DoT +1`;
-        }
-        text += `\n現存召喚物回復 25% 最大生命`;
-        return text;
-    }
-
-    return pathName;
+    if (pathKey === 'a') return '🐕獵犬強化';
+    if (pathKey === 'b') return '🐸 青蛙強化';
+    if (pathKey === 'c') return '加快施法及上限+1';
+    return '';
 }
 
 function updateSummonCountUI() {
@@ -519,29 +493,6 @@ class TransformPoof {
     }
 }
 
-class PoisonExplosion {
-    constructor(x, y, radius) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.life = 20;
-        this.maxLife = 20;
-    }
-    update() {
-        this.life--;
-        return this.life > 0;
-    }
-    draw() {
-        ctx.save();
-        ctx.globalAlpha = (this.life / this.maxLife) * 0.5;
-        ctx.fillStyle = '#b2ff59';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius * (1 - this.life / this.maxLife) + this.radius * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-    }
-}
-
 class Enemy {
     constructor(hpMult, type = 'normal') {
         const angle = Math.random() * Math.PI * 2;
@@ -584,22 +535,10 @@ class Enemy {
         this.isFading = false;
         this.fadeDuration = 45;
         this.fadeTimer = 0;
-
-        // 毒系 DoT 機制
-        this.poisonDoTTimer = 0;
     }
 
     update() {
         if (this.isFading) return;
-
-        // 結算 DoT
-        if (this.poisonDoTTimer > 0) {
-            this.poisonDoTTimer--;
-            if (this.poisonDoTTimer % 30 === 0 && player.skillStats.poisonDoTDamage) {
-                this.hp -= player.skillStats.poisonDoTDamage;
-                damageTexts.push(new DamageText(this.x, this.y, player.skillStats.poisonDoTDamage, '#00e676'));
-            }
-        }
 
         if (this.frozenTimer > 0) {
             this.frozenTimer--;
@@ -665,11 +604,6 @@ class Enemy {
             ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (this.poisonDoTTimer > 0) {
-            ctx.fillStyle = 'rgba(118, 255, 3, 0.3)';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 1.2, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -773,8 +707,6 @@ class Summon {
                         damageTexts.push(new DamageText(
                             e.x, e.y, player.skillStats.poisonDamage, '#76FF03'
                         ));
-                        // 附加/刷新 DoT (離開毒圈後會持續 120f)
-                        e.poisonDoTTimer = 120;
                     }
                 }
             }
@@ -964,22 +896,6 @@ class TetherEffect {
         if (!this.target || this.target.isFading) return;
 
         effects.push(new TransformPoof(this.target.x, this.target.y));
-
-        let expDmg = player.skillStats.explosionDamage || 12;
-        let expRad = player.skillStats.poisonRadius || 90; // 與毒圈半徑一致
-        effects.push(new PoisonExplosion(this.target.x, this.target.y, expRad));
-        
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.hp <= 0 || e.isFading) continue;
-            let dx = e.x - this.target.x;
-            let dy = e.y - this.target.y;
-            if (dx * dx + dy * dy <= expRad * expRad) {
-                e.hp -= expDmg;
-                damageTexts.push(new DamageText(e.x, e.y, expDmg, '#b2ff59'));
-                if(player.skillStats.isSpecial) e.poisonDoTTimer = 120; // 爆炸也能附加 DoT
-            }
-        }
 
         let frogCount = summons.filter(s => s.type === 'frog').length;
         if (frogCount >= player.skillStats.maxFrogs) {
@@ -1395,7 +1311,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(尚未達到8階極限的能力可全部取得)";
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(尚未達到極限的能力可全部取得)";
             const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
@@ -1439,7 +1355,6 @@ function levelUp() {
         }
     }
 
-    // 其他技能原本的升級邏輯
     if (player.level === 10) {
         document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(將突破極限，獲得所有能力)";
         let choices = [...s.upgrades];
