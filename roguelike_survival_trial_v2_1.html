@@ -3,38 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v5.10 (方塊介面版)</title>
+<title>Roguelike 生存：極限試煉 v5.10 (召喚平衡版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
     #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    .panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.85); padding: 30px; border-radius: 10px; border: 2px solid #555; text-align: center; pointer-events: auto; width: 85%; max-width: 450px; box-sizing: border-box; }
-    .btn { display: inline-block; background: #4CAF50; color: white; padding: 10px 20px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background 0.3s; box-sizing: border-box; }
+    .panel {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.88); padding: 30px; border-radius: 10px;
+        border: 2px solid #555; text-align: center; pointer-events: auto;
+        width: 88%; max-width: 500px; box-sizing: border-box;
+    }
+    .btn {
+        display: inline-block; background: #4CAF50; color: white; padding: 10px 20px;
+        margin: 10px; border: none; border-radius: 5px; cursor: pointer;
+        font-size: 16px; transition: background 0.3s; box-sizing: border-box;
+    }
     .btn:hover { background: #45a049; }
-    
     .btn-start {
-        width: 100px;
-        height: 100px;
-        margin: 10px 5px;
-        padding: 10px 5px;
-        display: inline-flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        width: 100px; height: 100px; margin: 10px 5px; padding: 10px 5px;
+        display: inline-flex; flex-direction: column; justify-content: center; align-items: center;
         vertical-align: top;
     }
-    .btn-start .emoji {
-        font-size: 28px;
-        margin-bottom: 8px;
-    }
-
-    .btn-upgrade { background: #2196F3; width: 100%; margin: 10px 0; display: block; }
+    .btn-start .emoji { font-size: 28px; margin-bottom: 8px; }
+    .btn-upgrade { background: #2196F3; width: 100%; margin: 10px 0; display: block; white-space: pre-line; }
     .btn-upgrade:hover { background: #1976D2; }
     .btn-special { background: #ff9800; font-weight: bold; text-shadow: 1px 1px 2px black; }
     .btn-special:hover { background: #e68a00; }
-    #exp-bar-container { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 80%; height: 20px; background: #333; border-radius: 10px; border: 2px solid #777; }
+    #exp-bar-container {
+        position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+        width: 80%; height: 20px; background: #333; border-radius: 10px; border: 2px solid #777;
+    }
     #exp-bar { height: 100%; width: 0%; background: #4CAF50; border-radius: 8px; transition: width 0.2s; }
-    #status { position: absolute; top: 40px; left: 50%; transform: translateX(-50%); font-size: 18px; text-shadow: 1px 1px 2px black; }
+    #status {
+        position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+        font-size: 18px; text-shadow: 1px 1px 2px black; text-align: center;
+    }
     .hidden { display: none !important; }
 </style>
 </head>
@@ -46,7 +50,7 @@
     <div id="exp-bar-container" class="hidden">
         <div id="exp-bar"></div>
     </div>
-    <div id="status" class="hidden">等級: 0 / 10</div>
+    <div id="status" class="hidden">進化等級: 0 / 10</div>
 
     <div id="start-screen" class="panel">
         <h2>Roguelike 生存試煉</h2>
@@ -82,95 +86,338 @@ canvas.height = window.innerHeight;
 let gameState = 'start';
 let keys = {};
 let frameCount = 0;
-let normalKillCount = 0; 
-let confettis = []; 
+let normalKillCount = 0;
+let confettis = [];
 
 let enemies = [];
 let gems = [];
-let healDrops = []; 
+let healDrops = [];
 let projectiles = [];
 let effects = [];
-let damageTexts = []; 
-let summons = []; 
-let tethers = []; 
+let damageTexts = [];
+let summons = [];
+let tethers = [];
 
 let level10Frames = 0;
 let bossIsDead = false;
 
 const player = {
-    x: canvas.width / 2, y: canvas.height / 2,
-    size: 15, speed: 4, hp: 100, maxHp: 100,
-    exp: 0, nextExp: 5, level: 0,
-    skill: null, skillStats: {}
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    size: 15,
+    speed: 4,
+    hp: 100,
+    maxHp: 100,
+    exp: 0,
+    nextExp: 5,
+    level: 0,
+    skill: null,
+    skillStats: {}
 };
 
 const joystick = {
-    active: false, startX: 0, startY: 0,
-    currentX: 0, currentY: 0, maxRadius: 50
+    active: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    maxRadius: 50
+};
+
+const summonTierTables = {
+    a: [
+        { spawnInterval: 260, maxHounds: 4 },
+        { spawnInterval: 234, maxHounds: 4 },
+        { spawnInterval: 208, maxHounds: 4 },
+        { spawnInterval: 182, maxHounds: 5 },
+        { spawnInterval: 156, maxHounds: 5 },
+        { spawnInterval: 130, maxHounds: 6 },
+        { spawnInterval: 108, maxHounds: 7 } // Lv10 突破
+    ],
+    b: [
+        { hp: 105, atk: 5, attackInterval: 30, speed: 3.45 },
+        { hp: 123, atk: 6, attackInterval: 30, speed: 3.48 },
+        { hp: 141, atk: 6, attackInterval: 29, speed: 3.50 },
+        { hp: 159, atk: 7, attackInterval: 29, speed: 3.53 },
+        { hp: 177, atk: 8, attackInterval: 28, speed: 3.56 },
+        { hp: 195, atk: 9, attackInterval: 27, speed: 3.60 },
+        { hp: 215, atk: 10, attackInterval: 26, speed: 3.64 } // Lv10 突破
+    ],
+    c: [
+        {
+            convertTime: 420,
+            tetherSlow: 0.15,
+            frogHp: 185,
+            frogAtk: 9,
+            frogAttackInterval: 29,
+            frogSpeed: 3.35,
+            maxFrogs: 4,
+            poisonRadius: 58,
+            poisonInterval: 24,
+            poisonDamage: 2,
+            poisonBossDamage: 1
+        },
+        {
+            convertTime: 392,
+            tetherSlow: 0.17,
+            frogHp: 205,
+            frogAtk: 10,
+            frogAttackInterval: 28,
+            frogSpeed: 3.37,
+            maxFrogs: 4,
+            poisonRadius: 63,
+            poisonInterval: 24,
+            poisonDamage: 2,
+            poisonBossDamage: 1
+        },
+        {
+            convertTime: 364,
+            tetherSlow: 0.19,
+            frogHp: 225,
+            frogAtk: 11,
+            frogAttackInterval: 27,
+            frogSpeed: 3.39,
+            maxFrogs: 4,
+            poisonRadius: 68,
+            poisonInterval: 23,
+            poisonDamage: 2,
+            poisonBossDamage: 1
+        },
+        {
+            convertTime: 338,
+            tetherSlow: 0.21,
+            frogHp: 245,
+            frogAtk: 12,
+            frogAttackInterval: 26,
+            frogSpeed: 3.41,
+            maxFrogs: 4,
+            poisonRadius: 73,
+            poisonInterval: 23,
+            poisonDamage: 3,
+            poisonBossDamage: 2
+        },
+        {
+            convertTime: 316,
+            tetherSlow: 0.23,
+            frogHp: 265,
+            frogAtk: 13,
+            frogAttackInterval: 25,
+            frogSpeed: 3.43,
+            maxFrogs: 5,
+            poisonRadius: 78,
+            poisonInterval: 22,
+            poisonDamage: 3,
+            poisonBossDamage: 2
+        },
+        {
+            convertTime: 300,
+            tetherSlow: 0.25,
+            frogHp: 285,
+            frogAtk: 14,
+            frogAttackInterval: 24,
+            frogSpeed: 3.45,
+            maxFrogs: 5,
+            poisonRadius: 83,
+            poisonInterval: 21,
+            poisonDamage: 4,
+            poisonBossDamage: 3
+        },
+        {
+            convertTime: 284,
+            tetherSlow: 0.28,
+            frogHp: 305,
+            frogAtk: 15,
+            frogAttackInterval: 23,
+            frogSpeed: 3.48,
+            maxFrogs: 6,
+            poisonRadius: 88,
+            poisonInterval: 20,
+            poisonDamage: 5,
+            poisonBossDamage: 4
+        } // Lv10 突破
+    ]
 };
 
 const skillDefinitions = {
     missile: {
-        id: 'missile', name: '追蹤魔彈',
-        cooldown: 45, currentCooldown: 0,
-        count: 1, speed: 5, damage: 15, 
-        turnSpeed: 2.0, size: 12, splitCount: 0, isSpecial: false, 
+        id: 'missile',
+        name: '追蹤魔彈',
+        cooldown: 45,
+        currentCooldown: 0,
+        count: 1,
+        speed: 5,
+        damage: 15,
+        turnSpeed: 2.0,
+        size: 12,
+        splitCount: 0,
+        isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '追蹤魔彈+1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(2, s.cooldown - 10) : Math.max(10, s.cooldown - 10) },
             { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 2 }
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：魔力爆發 (攻擊力提升2.5倍)', apply: (s) => { s.damage *= 2.5; s.isSpecial = true; } }
+        specialUpgrade: {
+            id: 's1',
+            desc: '超級強化：魔力爆發 (攻擊力提升2.5倍)',
+            apply: (s) => { s.damage *= 2.5; s.isSpecial = true; }
+        }
     },
     frost: {
-        id: 'frost', name: '冰霜法環',
-        cooldown: 120, currentCooldown: 0,
-        radius: 50, duration: 60, damage: 40, isSpecial: false,
+        id: 'frost',
+        name: '冰霜法環',
+        cooldown: 120,
+        currentCooldown: 0,
+        radius: 50,
+        duration: 60,
+        damage: 40,
+        isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
-            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(10, s.cooldown - 10) : Math.max(60, s.cooldown - 10) }, 
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 24 } 
+            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(10, s.cooldown - 10) : Math.max(60, s.cooldown - 10) },
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 24 }
         ],
-        specialUpgrade: { id: 's1', desc: '超級強化：絕對零度 (命中瞬間結凍)', apply: (s) => s.isSpecial = true }
+        specialUpgrade: {
+            id: 's1',
+            desc: '超級強化：絕對零度 (命中瞬間結凍)',
+            apply: (s) => s.isSpecial = true
+        }
     },
     summon: {
-        id: 'summon', name: '召喚法術',
-        tetherDuration: 540, 
-        fearRadius: 70,
-        fearCooldown: 180, 
-        summonBonusHp: 0,
-        summonBonusAtk: 0,
-        tetherDamage: 0, 
+        id: 'summon',
+        name: '召喚法術',
         isSpecial: false,
-        houndSpawnTimer: 0,
         currentTetherTarget: null,
-        upgrades: [
-            { id: 'u1', desc: '更快控制敵人', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 45) },
-            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 20; s.summonBonusAtk += 4; } },
-            { id: 'u3', desc: '牽引線傷害 (持續傷害)', apply: (s) => { s.tetherDamage += 2; } }
-        ],
-        specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
+        houndSpawnTimer: 0,
+        pathTiers: { a: 0, b: 0, c: 0 },
+        pathNames: {
+            a: '🐕召喚加速',
+            b: '🐕獵犬強化',
+            c: '轉化加速＋🐸強化'
+        },
+        upgrades: [],
+        specialUpgrade: {
+            id: 's1',
+            desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)',
+            apply: (s) => {
+                s.isSpecial = true;
+                recalcSummonStats(s);
+                refreshExistingSummons();
+            }
+        }
     }
 };
 
+function recalcSummonStats(s) {
+    const aTier = Math.min(s.pathTiers.a, 6);
+    const bTier = Math.min(s.pathTiers.b, 6);
+    const cTier = Math.min(s.pathTiers.c, 6);
+
+    const a = summonTierTables.a[aTier];
+    const b = summonTierTables.b[bTier];
+    const c = summonTierTables.c[cTier];
+
+    s.spawnInterval = a.spawnInterval;
+    s.maxHounds = a.maxHounds;
+
+    s.houndHp = b.hp;
+    s.houndAtk = b.atk;
+    s.houndAttackInterval = b.attackInterval;
+    s.houndSpeed = b.speed;
+
+    s.tetherDuration = c.convertTime;
+    s.tetherSlow = c.tetherSlow;
+
+    s.frogHp = c.frogHp;
+    s.frogAtk = c.frogAtk;
+    s.frogAttackInterval = c.frogAttackInterval;
+    s.frogSpeed = c.frogSpeed;
+    s.maxFrogs = c.maxFrogs;
+
+    s.poisonRadius = c.poisonRadius;
+    s.poisonInterval = c.poisonInterval;
+    s.poisonDamage = c.poisonDamage;
+    s.poisonBossDamage = c.poisonBossDamage;
+}
+
+function refreshExistingSummons() {
+    if (player.skill !== 'summon') return;
+    summons.forEach(s => s.refreshStats());
+}
+
+function applySummonUpgrade(pathKey, allowBreakthrough = false) {
+    const s = player.skillStats;
+    const maxTier = allowBreakthrough ? 6 : 5;
+    if (s.pathTiers[pathKey] >= maxTier) return false;
+    s.pathTiers[pathKey] += 1;
+    recalcSummonStats(s);
+    refreshExistingSummons();
+    return true;
+}
+
+function getSummonUpgradeLabel(pathKey, allowBreakthrough = false) {
+    const s = player.skillStats;
+    const currentTier = s.pathTiers[pathKey];
+    const maxTier = allowBreakthrough ? 6 : 5;
+    if (currentTier >= maxTier) return null;
+
+    const nextTier = currentTier + 1;
+    const pathName = s.pathNames[pathKey];
+
+    if (pathKey === 'a') {
+        const cur = summonTierTables.a[currentTier];
+        const next = summonTierTables.a[nextTier];
+        let extra = '';
+        if (next.maxHounds !== cur.maxHounds) extra = `\n獵犬上限 ${cur.maxHounds} → ${next.maxHounds}`;
+        return `${pathName} [${currentTier}→${nextTier}]\n召喚間隔 ${cur.spawnInterval}f → ${next.spawnInterval}f${extra}`;
+    }
+
+    if (pathKey === 'b') {
+        const cur = summonTierTables.b[currentTier];
+        const next = summonTierTables.b[nextTier];
+        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f`;
+    }
+
+    if (pathKey === 'c') {
+        const cur = summonTierTables.c[currentTier];
+        const next = summonTierTables.c[nextTier];
+        let poisonText = '';
+        if (player.skillStats.isSpecial) {
+            poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
+        }
+        let frogCapText = '';
+        if (next.maxFrogs !== cur.maxFrogs) frogCapText = `\n青蛙上限 ${cur.maxFrogs} → ${next.maxFrogs}`;
+        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f → ${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}`;
+    }
+
+    return pathName;
+}
+
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
 
 canvas.addEventListener('touchstart', e => {
     if (gameState !== 'playing') return;
     e.preventDefault();
     const touch = e.changedTouches[0];
     joystick.active = true;
-    joystick.startX = touch.clientX; joystick.startY = touch.clientY;
-    joystick.currentX = touch.clientX; joystick.currentY = touch.clientY;
+    joystick.startX = touch.clientX;
+    joystick.startY = touch.clientY;
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
 }, { passive: false });
+
 canvas.addEventListener('touchmove', e => {
     if (!joystick.active) return;
     e.preventDefault();
     const touch = e.changedTouches[0];
-    joystick.currentX = touch.clientX; joystick.currentY = touch.clientY;
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
 }, { passive: false });
+
 const stopJoystick = () => joystick.active = false;
 canvas.addEventListener('touchend', stopJoystick);
 canvas.addEventListener('touchcancel', stopJoystick);
@@ -180,21 +427,31 @@ function startGame(skillId) {
     player.skillStats = JSON.parse(JSON.stringify(skillDefinitions[skillId]));
     player.skillStats.upgrades = skillDefinitions[skillId].upgrades;
     player.skillStats.specialUpgrade = skillDefinitions[skillId].specialUpgrade;
-    
-    player.x = canvas.width / 2; player.y = canvas.height / 2;
-    player.hp = player.maxHp;
-    player.level = 0; player.exp = 0; player.nextExp = 5;
-    
-    normalKillCount = 0; 
-    enemies = []; gems = []; healDrops = []; projectiles = []; effects = []; damageTexts = [];
-    summons = []; tethers = [];
-    
-    level10Frames = 0; bossIsDead = false;
 
     if (skillId === 'summon') {
-        summons.push(new Summon(player.x, player.y - 30, 'hound'));
+        recalcSummonStats(player.skillStats);
     }
-    
+
+    player.x = canvas.width / 2;
+    player.y = canvas.height / 2;
+    player.hp = player.maxHp;
+    player.level = 0;
+    player.exp = 0;
+    player.nextExp = 5;
+
+    normalKillCount = 0;
+    enemies = [];
+    gems = [];
+    healDrops = [];
+    projectiles = [];
+    effects = [];
+    damageTexts = [];
+    summons = [];
+    tethers = [];
+
+    level10Frames = 0;
+    bossIsDead = false;
+
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
@@ -205,64 +462,37 @@ function startGame(skillId) {
 
 class DamageText {
     constructor(x, y, damage, color) {
-        this.x = x + (Math.random() - 0.5) * 30; 
+        this.x = x + (Math.random() - 0.5) * 30;
         this.y = y + (Math.random() - 0.5) * 10;
         this.damage = Math.round(damage);
         this.color = color;
-        this.life = 35; this.maxLife = 35;
-        this.vy = -1.5 - Math.random(); 
-    }
-    update() {
-        this.y += this.vy; this.life--;
-        return this.life > 0;
-    }
-    draw() {
-        ctx.save();
-        ctx.globalAlpha = this.life / this.maxLife;
-        ctx.fillStyle = this.color; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'center';
-        ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-        ctx.strokeText(this.damage, this.x, this.y); ctx.fillText(this.damage, this.x, this.y);
-        ctx.restore();
-    }
-}
-
-class FearRipple {
-    constructor(x, y, maxRadius) {
-        this.x = x; this.y = y;
-        this.maxRadius = maxRadius;
-        this.radius = 0;
-        this.life = 35; 
+        this.life = 35;
         this.maxLife = 35;
+        this.vy = -1.5 - Math.random();
     }
     update() {
-        let progress = 1 - (this.life / this.maxLife);
-        this.radius = this.maxRadius * (1 - Math.pow(1 - progress, 3));
+        this.y += this.vy;
         this.life--;
         return this.life > 0;
     }
     draw() {
         ctx.save();
-        let alpha = this.life / this.maxLife;
-        ctx.globalAlpha = alpha;
-        
-        ctx.fillStyle = 'rgba(216, 27, 96, 0.3)'; 
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(255, 64, 129, 0.9)'; 
-        ctx.lineWidth = 3 + (alpha * 5); 
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.fillStyle = this.color;
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.damage, this.x, this.y);
+        ctx.fillText(this.damage, this.x, this.y);
         ctx.restore();
     }
 }
 
 class TransformPoof {
     constructor(x, y) {
-        this.x = x; this.y = y;
+        this.x = x;
+        this.y = y;
         this.life = 15;
         this.maxLife = 15;
         this.radius = 5;
@@ -275,7 +505,7 @@ class TransformPoof {
     draw() {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
-        ctx.fillStyle = '#8BC34A'; 
+        ctx.fillStyle = '#8BC34A';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -290,53 +520,53 @@ class Enemy {
         this.x = player.x + Math.cos(angle) * dist;
         this.y = player.y + Math.sin(angle) * dist;
         this.type = type;
-        
+
         let baseSpeed = 1.5 + Math.random() * 1;
         let hpScale = 1.2;
         if (player.level >= 5) {
-            let progress = Math.min(4, player.level - 5) / 4; 
-            hpScale = 1.2 * (1 + 0.5 * progress); 
+            let progress = Math.min(4, player.level - 5) / 4;
+            hpScale = 1.2 * (1 + 0.5 * progress);
         }
 
         if (type === 'boss') {
-            this.size = 35; this.speed = 3.0; this.hp = 30 * hpMult * hpScale * 10.0; this.emoji = '👻';
+            this.size = 35;
+            this.speed = 3.0;
+            this.hp = 30 * hpMult * hpScale * 10.0;
+            this.emoji = '👻';
         } else if (type === 'mini') {
-            this.size = 18; this.speed = baseSpeed * 0.6; this.hp = 30 * hpMult * hpScale * 2.0; this.emoji = '👹';
+            this.size = 18;
+            this.speed = baseSpeed * 0.6;
+            this.hp = 30 * hpMult * hpScale * 2.0;
+            this.emoji = '👹';
         } else {
-            this.size = 12 + Math.random() * 5; this.speed = baseSpeed; this.hp = 30 * hpMult * hpScale; this.emoji = '👾';
+            this.size = 12 + Math.random() * 5;
+            this.speed = baseSpeed;
+            this.hp = 30 * hpMult * hpScale;
+            this.emoji = '👾';
         }
-        
-        this.maxHp = this.hp; this.baseSpeed = this.speed; 
-        this.frozenTimer = 0; this.frostHitCount = 0; this.slowMultiplier = 1.0;
-        
-        this.tauntedBy = null; 
-        this.fearTimer = 0;    
-        this.fearSourceX = 0;
-        this.fearSourceY = 0;
-        
+
+        this.maxHp = this.hp;
+        this.baseSpeed = this.speed;
+        this.frozenTimer = 0;
+        this.frostHitCount = 0;
+        this.slowMultiplier = 1.0;
+
+        this.tauntedBy = null;
+
         this.isFading = false;
         this.fadeDuration = 45;
         this.fadeTimer = 0;
     }
-    update() {
-        if (this.isFading) return; 
 
-        if (this.fearTimer > 0) {
-            this.fearTimer--;
-            const dx = this.x - this.fearSourceX;
-            const dy = this.y - this.fearSourceY;
-            const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-            const speed = this.baseSpeed * 0.2; 
-            this.x += (dx / dist) * speed;
-            this.y += (dy / dist) * speed;
-            return; 
-        }
+    update() {
+        if (this.isFading) return;
 
         if (this.frozenTimer > 0) {
-            this.frozenTimer--; this.slowMultiplier = 1.0; 
+            this.frozenTimer--;
+            this.slowMultiplier = 1.0;
             return;
         }
-        
+
         let targetX = player.x;
         let targetY = player.y;
         let targetHitDist = player.size + this.size;
@@ -347,7 +577,7 @@ class Enemy {
             let sDx = this.tauntedBy.x - this.x;
             let sDy = this.tauntedBy.y - this.y;
             let sDistSq = sDx * sDx + sDy * sDy;
-            
+
             if (sDistSq < (sHitDist * 1.3) * (sHitDist * 1.3)) {
                 targetX = this.tauntedBy.x;
                 targetY = this.tauntedBy.y;
@@ -355,32 +585,33 @@ class Enemy {
                 targetObj = this.tauntedBy;
             }
         } else {
-            this.tauntedBy = null; 
+            this.tauntedBy = null;
         }
 
         const dx = targetX - this.x;
         const dy = targetY - this.y;
-        const distSq = dx * dx + dy * dy; 
+        const distSq = dx * dx + dy * dy;
         const dist = Math.sqrt(distSq) || 1;
-        
+
         let actualSpeed = this.baseSpeed * this.slowMultiplier;
-        
+
         if (distSq > (targetHitDist * 0.9) * (targetHitDist * 0.9)) {
             this.x += (dx / dist) * actualSpeed;
             this.y += (dy / dist) * actualSpeed;
         }
-        
-        this.slowMultiplier = 1.0; 
-        
+
+        this.slowMultiplier = 1.0;
+
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
                 if (player.hp <= 0) gameOver(false);
             } else {
-                targetObj.hp -= 0.5; 
+                targetObj.hp -= 0.5;
             }
         }
     }
+
     draw() {
         ctx.save();
         if (this.isFading) {
@@ -388,14 +619,21 @@ class Enemy {
         }
 
         if (this.frozenTimer > 0) {
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+            ctx.fill();
         }
-        ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y); 
 
-        if (this.fearTimer > 0) {
-            ctx.font = `18px Arial`; ctx.fillText('😱', this.x, this.y - this.size - 8);
-        } else if (this.type === 'boss' && this.frostHitCount > 0) {
-            ctx.font = `16px Arial`; let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️'; ctx.fillText(mark, this.x, this.y - this.size - 8);
+        ctx.font = `${this.size * 2}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.emoji, this.x, this.y);
+
+        if (this.type === 'boss' && this.frostHitCount > 0) {
+            ctx.font = `16px Arial`;
+            let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
+            ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
         ctx.restore();
     }
@@ -403,62 +641,82 @@ class Enemy {
 
 class Summon {
     constructor(x, y, type, sourceEnemy = null) {
-        this.x = x; this.y = y;
-        this.type = type; 
+        this.x = x;
+        this.y = y;
+        this.type = type;
         this.size = 15;
-        const s = player.skillStats;
-        
+
         this.isSpawning = true;
         this.spawnTimer = 0;
-        this.spawnDuration = 45; 
-        this.sourceEnemy = sourceEnemy; 
+        this.spawnDuration = 45;
+        this.sourceEnemy = sourceEnemy;
 
-        if (type === 'hound') {
-            this.maxHp = 150 + (s ? s.summonBonusHp : 0);
-            this.hp = this.maxHp;
-            this.atk = 8 + (s ? s.summonBonusAtk : 0);
-            this.speed = 3.5;
-            this.emoji = '🐕';
-        } else if (type === 'frog') {
-            this.maxHp = 210 + (s ? s.summonBonusHp : 0);
-            this.hp = this.maxHp;
-            this.atk = 10 + (s ? s.summonBonusAtk : 0);
-            this.speed = 3.5;
-            this.emoji = '🐸';
-        }
-        
         this.target = null;
         this.targetOffset = { x: 0, y: 0 };
         this.attackCooldown = 0;
         this.poisonTimer = 0;
+
+        this.emoji = this.type === 'hound' ? '🐕' : '🐸';
+        this.refreshStats(true);
     }
-    
+
+    refreshStats(resetHp = false) {
+        const s = player.skillStats;
+        let newMaxHp, newAtk, newSpeed, newAttackInterval;
+
+        if (this.type === 'hound') {
+            newMaxHp = s.houndHp;
+            newAtk = s.houndAtk;
+            newSpeed = s.houndSpeed;
+            newAttackInterval = s.houndAttackInterval;
+        } else {
+            newMaxHp = s.frogHp;
+            newAtk = s.frogAtk;
+            newSpeed = s.frogSpeed;
+            newAttackInterval = s.frogAttackInterval;
+        }
+
+        const hpRatio = (this.maxHp && this.maxHp > 0) ? this.hp / this.maxHp : 1;
+
+        this.maxHp = newMaxHp;
+        this.atk = newAtk;
+        this.speed = newSpeed;
+        this.attackInterval = newAttackInterval;
+
+        if (resetHp) {
+            this.hp = this.maxHp;
+        } else {
+            this.hp = Math.max(1, Math.min(this.maxHp, Math.round(this.maxHp * hpRatio)));
+        }
+
+        this.attackCooldown = Math.min(this.attackCooldown, this.attackInterval);
+    }
+
     update() {
         if (this.isSpawning) {
             this.spawnTimer++;
-            if (this.sourceEnemy) {
-                this.sourceEnemy.fadeTimer = this.spawnTimer;
-            }
+            if (this.sourceEnemy) this.sourceEnemy.fadeTimer = this.spawnTimer;
             if (this.spawnTimer >= this.spawnDuration) {
                 this.isSpawning = false;
-                if (this.sourceEnemy) {
-                    this.sourceEnemy.hp = 0; 
-                }
+                if (this.sourceEnemy) this.sourceEnemy.hp = 0;
             }
-            return true; 
+            return true;
         }
 
         if (this.type === 'frog' && player.skillStats.isSpecial) {
             this.poisonTimer++;
-            if (this.poisonTimer >= 20) { 
+            if (this.poisonTimer >= player.skillStats.poisonInterval) {
                 this.poisonTimer = 0;
                 for (let i = 0; i < enemies.length; i++) {
                     let e = enemies[i];
                     if (e.hp <= 0 || e.isFading) continue;
-                    const dx = e.x - this.x; const dy = e.y - this.y;
-                    if (dx*dx + dy*dy <= 80*80) { 
-                        e.hp -= 2; 
-                        damageTexts.push(new DamageText(e.x, e.y, 2, '#76FF03'));
+
+                    const dx = e.x - this.x;
+                    const dy = e.y - this.y;
+                    if (dx * dx + dy * dy <= player.skillStats.poisonRadius * player.skillStats.poisonRadius) {
+                        const damage = (e.type === 'boss') ? player.skillStats.poisonBossDamage : player.skillStats.poisonDamage;
+                        e.hp -= damage;
+                        damageTexts.push(new DamageText(e.x, e.y, damage, e.type === 'boss' ? '#A5D6A7' : '#76FF03'));
                     }
                 }
             }
@@ -473,50 +731,55 @@ class Summon {
             this.target = null;
             let freeEnemies = [];
             let engagedEnemies = [];
-            
+
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
                 let isTethered = player.skillStats && player.skillStats.currentTetherTarget === e;
 
                 if (e.hp <= 0 || e.isFading || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m || isTethered) continue;
-                
+
                 let targetingCount = summons.filter(s => s.target === e).length;
-                
+
                 if (targetingCount === 0) {
                     freeEnemies.push(e);
                 } else {
-                    engagedEnemies.push({enemy: e, count: targetingCount});
+                    engagedEnemies.push({ enemy: e, count: targetingCount });
                 }
             }
-            
-            let closest = null; 
+
+            let closest = null;
             let minDistSq = Infinity;
-            
+
             if (freeEnemies.length > 0) {
                 for (let e of freeEnemies) {
-                    const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
-                    if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
+                    const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+                    if (dSq < minDistSq) {
+                        minDistSq = dSq;
+                        closest = e;
+                    }
                 }
                 if (closest) {
                     this.target = closest;
-                    closest.tauntedBy = this; 
+                    closest.tauntedBy = this;
                     this.targetOffset = { x: (this.size + closest.size) * 0.75, y: 0 };
                 }
-            } 
-            else if (engagedEnemies.length > 0) {
+            } else if (engagedEnemies.length > 0) {
                 for (let item of engagedEnemies) {
                     let e = item.enemy;
-                    const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
-                    if (dSq < minDistSq) { minDistSq = dSq; closest = item; }
+                    const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+                    if (dSq < minDistSq) {
+                        minDistSq = dSq;
+                        closest = item;
+                    }
                 }
                 if (closest) {
                     this.target = closest.enemy;
                     let c = closest.count;
                     let hitDist = this.size + this.target.size;
-                    let overlapDist = this.size; 
+                    let overlapDist = this.size;
                     let yOff = 0;
-                    
+
                     if (c === 1) yOff = -overlapDist;
                     else if (c === 2) yOff = overlapDist;
                     else if (c === 3) yOff = -overlapDist * 2;
@@ -526,7 +789,7 @@ class Summon {
                     else if (c === 7) yOff = -overlapDist * 4;
                     else if (c === 8) yOff = overlapDist * 4;
                     else if (c === 9) yOff = -overlapDist * 5;
-                    
+
                     this.targetOffset = { x: hitDist * 0.75, y: yOff };
                 }
             }
@@ -535,62 +798,77 @@ class Summon {
         if (this.target) {
             const idealX = this.target.x + this.targetOffset.x;
             const idealY = this.target.y + this.targetOffset.y;
-            
-            const dx = idealX - this.x; 
+
+            const dx = idealX - this.x;
             const dy = idealY - this.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            
+
             if (dist > this.speed) {
-                this.x += (dx / dist) * this.speed; 
+                this.x += (dx / dist) * this.speed;
                 this.y += (dy / dist) * this.speed;
             } else {
                 this.x = idealX;
                 this.y = idealY;
             }
-            
+
             if (this.attackCooldown <= 0) {
                 const actualDx = this.target.x - this.x;
                 const actualDy = this.target.y - this.y;
                 const hitDist = this.size + this.target.size;
-                
+
                 if (actualDx * actualDx + actualDy * actualDy < (hitDist * 2.2) * (hitDist * 2.2)) {
                     this.target.hp -= this.atk;
-                    damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, '#FF9800'));
-                    this.attackCooldown = 30; 
+                    damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, this.type === 'hound' ? '#FF9800' : '#8BC34A'));
+                    this.attackCooldown = this.attackInterval;
                 }
             }
         } else {
-            const dx = player.x - this.x; const dy = player.y - this.y;
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
             const distSq = dx * dx + dy * dy;
             if (distSq > 100 * 100) {
                 const dist = Math.sqrt(distSq);
-                this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed;
+                this.x += (dx / dist) * this.speed;
+                this.y += (dy / dist) * this.speed;
             }
         }
-        
+
         if (this.attackCooldown > 0) this.attackCooldown--;
         return this.hp > 0;
     }
-    
+
     draw() {
         if (this.isSpawning) {
             let progress = this.spawnTimer / this.spawnDuration;
             ctx.save();
             ctx.beginPath();
             ctx.ellipse(this.x, this.y + 10, 25 * progress, 10 * progress, 0, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 215, 0, ${1 - progress})`; 
+            ctx.fillStyle = `rgba(255, 215, 0, ${1 - progress})`;
             ctx.fill();
-            
+
             ctx.globalAlpha = progress;
-            ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
+            ctx.font = `${this.size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.emoji, this.x, this.y);
             ctx.restore();
         } else {
             if (this.type === 'frog' && player.skillStats.isSpecial) {
-                ctx.fillStyle = 'rgba(118, 255, 3, 0.2)'; ctx.beginPath(); ctx.arc(this.x, this.y, 80, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'rgba(118, 255, 3, 0.18)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, player.skillStats.poisonRadius, 0, Math.PI * 2);
+                ctx.fill();
             }
-            ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
-            ctx.fillStyle = '#F44336'; ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
-            ctx.fillStyle = '#4CAF50'; ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
+
+            ctx.font = `${this.size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.emoji, this.x, this.y);
+
+            ctx.fillStyle = '#F44336';
+            ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
         }
     }
 }
@@ -599,65 +877,39 @@ class TetherEffect {
     constructor(target, stats) {
         this.target = target;
         this.stats = stats;
-        this.duration = 0; 
+        this.duration = 0;
         this.maxDuration = stats.tetherDuration;
-        this.pulseTimer = 0; 
-        this.damageTimer = 0;
     }
+
     update() {
         if (!this.target || this.target.hp <= 0 || this.target.isFading) {
-            this.convertToFrog(); return false;
+            this.convertToFrog();
+            return false;
         }
 
-        if (this.stats.tetherDamage > 0) {
-            this.damageTimer++;
-            if (this.damageTimer >= 20) {
-                this.target.hp -= this.stats.tetherDamage;
-                damageTexts.push(new DamageText(this.target.x, this.target.y, this.stats.tetherDamage, '#ba68c8'));
-                this.damageTimer = 0;
-                
-                if (this.target.hp <= 0) {
-                    this.convertToFrog(); return false;
-                }
-            }
-        }
-        
-        this.target.slowMultiplier = 0.5; 
-        
-        if (this.pulseTimer <= 0) {
-            this.pulseTimer = this.stats.fearCooldown;
-            effects.push(new FearRipple(this.target.x, this.target.y, this.stats.fearRadius));
-
-            for (let i = 0; i < enemies.length; i++) {
-                let e = enemies[i];
-                if (e === this.target || e.hp <= 0 || e.isFading) continue;
-                const dx = e.x - this.target.x; const dy = e.y - this.target.y;
-                if (dx*dx + dy*dy <= this.stats.fearRadius * this.stats.fearRadius) {
-                    e.fearTimer = 60; 
-                    e.fearSourceX = this.target.x; e.fearSourceY = this.target.y;
-                }
-            }
-        } else {
-            this.pulseTimer--;
-        }
-        
+        this.target.slowMultiplier = 1.0 - this.stats.tetherSlow;
         this.duration++;
+
         if (this.duration >= this.maxDuration) {
-            this.convertToFrog(); return false;
+            this.convertToFrog();
+            return false;
         }
         return true;
     }
-    
+
     convertToFrog() {
         if (!this.target || this.target.isFading) return;
+
         effects.push(new TransformPoof(this.target.x, this.target.y));
-        
+
         let frogCount = summons.filter(s => s.type === 'frog').length;
-        if (frogCount >= 5) {
+        if (frogCount >= player.skillStats.maxFrogs) {
             let oldestFrogIndex = summons.findIndex(s => s.type === 'frog');
             if (oldestFrogIndex !== -1) {
                 let oldFrog = summons[oldestFrogIndex];
-                for (let e of enemies) if (e.tauntedBy === oldFrog) e.tauntedBy = null;
+                for (let e of enemies) {
+                    if (e.tauntedBy === oldFrog) e.tauntedBy = null;
+                }
                 summons.splice(oldestFrogIndex, 1);
             }
         }
@@ -667,201 +919,348 @@ class TetherEffect {
         this.target.fadeTimer = 0;
 
         summons.push(new Summon(this.target.x, this.target.y, 'frog', this.target));
-        player.skillStats.currentTetherTarget = null; 
+        player.skillStats.currentTetherTarget = null;
     }
-    
+
     draw() {
         if (!this.target || this.target.isFading) return;
+
         ctx.save();
-        ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(player.x, player.y); ctx.lineTo(this.target.x, this.target.y);
-        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
-        
-        ctx.beginPath(); ctx.arc(this.target.x, this.target.y, this.target.size + 10, -Math.PI/2, -Math.PI/2 + (this.duration / this.maxDuration) * Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 3; ctx.setLineDash([]); ctx.stroke();
-        
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(this.target.x, this.target.y);
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(
+            this.target.x,
+            this.target.y,
+            this.target.size + 10,
+            -Math.PI / 2,
+            -Math.PI / 2 + (this.duration / this.maxDuration) * Math.PI * 2
+        );
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+        ctx.stroke();
         ctx.restore();
     }
 }
 
 class Gem {
-    constructor(x, y) { this.x = x; this.y = y; this.size = 5; }
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 5;
+    }
     update() {
-        const dx = player.x - this.x; const dy = player.y - this.y; const distSq = dx * dx + dy * dy; 
-        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < 6400) {
+            this.x += dx * 0.1;
+            this.y += dy * 0.1;
+        }
         if (distSq < (player.size + this.size) * (player.size + this.size)) {
-            player.exp++; updateUI();
+            player.exp++;
+            updateUI();
             if (player.exp >= player.nextExp && player.level < 10) levelUp();
             return false;
         }
         return true;
     }
-    draw() { ctx.fillStyle = '#4CAF50'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
+    draw() {
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 class HealDrop {
-    constructor(x, y) { this.x = x; this.y = y; this.size = 5; }
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 5;
+    }
     update() {
-        const dx = player.x - this.x; const dy = player.y - this.y; const distSq = dx * dx + dy * dy;
-        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < 6400) {
+            this.x += dx * 0.1;
+            this.y += dy * 0.1;
+        }
         if (distSq < (player.size + this.size) * (player.size + this.size)) {
-            player.hp = Math.min(player.maxHp, player.hp + 20); return false; 
-        }
-        return true;
-    }
-    draw() { ctx.fillStyle = '#FF5252'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill(); }
-}
-
-class Projectile {
-    constructor(x, y, target, stats, isSplit = false) {
-        this.x = x; this.y = y; this.target = target; this.stats = stats;
-        this.speed = stats.speed; this.isSpecial = stats.isSpecial;
-        this.hitEnemies = new Set(); this.isSplit = isSplit;
-        this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
-        this.size = isSplit ? 3.5 : (stats.size || 12); this.pierce = 1; 
-        this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180)); 
-        if (this.target) this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x); else this.angle = -Math.PI / 2;
-        if (!isSplit) this.angle += (Math.random() - 0.5) * 0.6;
-        this.vx = Math.cos(this.angle) * this.speed; this.vy = Math.sin(this.angle) * this.speed;
-    }
-    update() {
-        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
-        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
-            let closest = null; let minDistSq = Infinity;
-            for (let i = 0; i < enemies.length; i++) {
-                let e = enemies[i];
-                const m = e.size + 10;
-                if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
-                const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y); 
-                if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
-            }
-            this.target = closest;
-        }
-        if (this.target) {
-            const dx = this.target.x - this.x; const dy = this.target.y - this.y;
-            const targetAngle = Math.atan2(dy, dx);
-            let angleDiff = targetAngle - this.angle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2; while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad; else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
-            this.angle += angleDiff; this.vx = Math.cos(this.angle) * this.speed; this.vy = Math.sin(this.angle) * this.speed;
-        } 
-        this.x += this.vx; this.y += this.vy;
-        
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
-            const distSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
-            if (distSq < (e.size + this.size)*(e.size + this.size)) {
-                let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
-                e.hp -= actualDamage; this.hitEnemies.add(e);
-                let textColor = this.isSplit ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc') : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
-                damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
-                
-                if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
-                    for (let j = 0; j < this.stats.splitCount; j++) {
-                        let splitProj = new Projectile(this.x + (Math.random() - 0.5) * 20, this.y + (Math.random() - 0.5) * 20, null, this.stats, true);
-                        splitProj.hitEnemies.add(e); 
-                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4; 
-                        splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed; splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
-                        projectiles.push(splitProj);
-                    }
-                }
-                this.pierce--; if (this.pierce <= 0) return false; 
-            }
+            player.hp = Math.min(player.maxHp, player.hp + 20);
+            return false;
         }
         return true;
     }
     draw() {
-        if (this.isSpecial) { ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)'; ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2); ctx.fill(); }
-        ctx.font = this.isSplit ? '16px Arial' : '24px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.isSplit ? '✨' : '⭐️', this.x, this.y);
+        ctx.fillStyle = '#FF5252';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+class Projectile {
+    constructor(x, y, target, stats, isSplit = false) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.stats = stats;
+        this.speed = stats.speed;
+        this.isSpecial = stats.isSpecial;
+        this.hitEnemies = new Set();
+        this.isSplit = isSplit;
+        this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
+        this.size = isSplit ? 3.5 : (stats.size || 12);
+        this.pierce = 1;
+        this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180));
+
+        if (this.target) this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        else this.angle = -Math.PI / 2;
+
+        if (!isSplit) this.angle += (Math.random() - 0.5) * 0.6;
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
+    }
+
+    update() {
+        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
+
+        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
+            let closest = null;
+            let minDistSq = Infinity;
+            for (let i = 0; i < enemies.length; i++) {
+                let e = enemies[i];
+                const m = e.size + 10;
+                if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+                const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+                if (dSq < minDistSq) {
+                    minDistSq = dSq;
+                    closest = e;
+                }
+            }
+            this.target = closest;
+        }
+
+        if (this.target) {
+            const dx = this.target.x - this.x;
+            const dy = this.target.y - this.y;
+            const targetAngle = Math.atan2(dy, dx);
+            let angleDiff = targetAngle - this.angle;
+
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad;
+            else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
+
+            this.angle += angleDiff;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
+
+            const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+            if (distSq < (e.size + this.size) * (e.size + this.size)) {
+                let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
+                e.hp -= actualDamage;
+                this.hitEnemies.add(e);
+
+                let textColor = this.isSplit ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc') : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
+                damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
+
+                if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
+                    for (let j = 0; j < this.stats.splitCount; j++) {
+                        let splitProj = new Projectile(
+                            this.x + (Math.random() - 0.5) * 20,
+                            this.y + (Math.random() - 0.5) * 20,
+                            null,
+                            this.stats,
+                            true
+                        );
+                        splitProj.hitEnemies.add(e);
+                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
+                        splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
+                        splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
+                        projectiles.push(splitProj);
+                    }
+                }
+
+                this.pierce--;
+                if (this.pierce <= 0) return false;
+            }
+        }
+        return true;
+    }
+
+    draw() {
+        if (this.isSpecial) {
+            ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.font = this.isSplit ? '16px Arial' : '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.isSplit ? '✨' : '⭐️', this.x, this.y);
     }
 }
 
 class FrostEffect {
     constructor(x, y, stats) {
-        this.x = x; this.y = y; this.maxRadius = stats.radius; this.radius = 0;
-        this.duration = stats.duration; this.maxDuration = stats.duration; 
-        this.damage = stats.damage; this.isSpecial = stats.isSpecial; this.processedEnemies = new Set(); 
+        this.x = x;
+        this.y = y;
+        this.maxRadius = stats.radius;
+        this.radius = 0;
+        this.duration = stats.duration;
+        this.maxDuration = stats.duration;
+        this.damage = stats.damage;
+        this.isSpecial = stats.isSpecial;
+        this.processedEnemies = new Set();
     }
+
     update() {
-        if (this.radius < this.maxRadius) this.radius += 8; this.duration--;
+        if (this.radius < this.maxRadius) this.radius += 8;
+        this.duration--;
+
         let elapsedFrames = this.maxDuration - this.duration;
+
         for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i]; if (e.hp <= 0 || e.isFading) continue; 
-            if ((e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y) < this.radius * this.radius) {
-                e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6; 
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading) continue;
+
+            if ((e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y) < this.radius * this.radius) {
+                e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6;
+
                 if (!this.processedEnemies.has(e)) {
-                    this.processedEnemies.add(e); e.hp -= this.damage;
+                    this.processedEnemies.add(e);
+                    e.hp -= this.damage;
                     damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
+
                     if (this.isSpecial) {
                         if (e.type === 'boss') {
                             if (!this.hitBossesThisCast) this.hitBossesThisCast = new Set();
                             if (!this.hitBossesThisCast.has(e)) {
-                                this.hitBossesThisCast.add(e); e.frostHitCount++;
-                                if (e.frostHitCount >= 3) { e.frozenTimer = 10; e.frostHitCount = 0; }
+                                this.hitBossesThisCast.add(e);
+                                e.frostHitCount++;
+                                if (e.frostHitCount >= 3) {
+                                    e.frozenTimer = 10;
+                                    e.frostHitCount = 0;
+                                }
                             }
-                        } else { e.frozenTimer = 10; }
+                        } else {
+                            e.frozenTimer = 10;
+                        }
                     }
                 }
-                if (elapsedFrames > 0 && elapsedFrames % 4 === 0) { e.hp -= 1; damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff')); }
+
+                if (elapsedFrames > 0 && elapsedFrames % 4 === 0) {
+                    e.hp -= 1;
+                    damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff'));
+                }
             }
         }
         return this.duration > 0;
     }
+
     draw() {
-        ctx.save(); ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration);
-        ctx.strokeStyle = 'rgb(150, 200, 255)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
-        ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('❄️', this.x, this.y);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.duration / this.maxDuration);
+        ctx.strokeStyle = 'rgb(150, 200, 255)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.font = `${Math.max(10, this.radius * 1.2)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('❄️', this.x, this.y);
         ctx.restore();
     }
 }
 
 function fireSkill() {
     const s = player.skillStats;
+
     if (player.skill === 'summon') {
-        let houndCount = summons.filter(sum => sum.type === 'hound').length;
-        if (houndCount < 5) {
+        const houndCount = summons.filter(sum => sum.type === 'hound').length;
+
+        if (houndCount < s.maxHounds) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= 180) { 
+            if (s.houndSpawnTimer >= s.spawnInterval) {
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
         } else {
             s.houndSpawnTimer = 0;
         }
-        
+
         if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0 || s.currentTetherTarget.isFading) {
-            let bestTarget = null; let maxHpFound = -1;
+            let bestTarget = null;
+            let maxHpFound = -1;
+
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
-                if (e.type === 'boss' || e.hp <= 0 || e.isFading) continue; 
+                if (e.type === 'boss' || e.hp <= 0 || e.isFading) continue;
                 if (e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
-                
+
                 if (e.maxHp > maxHpFound) {
-                    maxHpFound = e.maxHp; bestTarget = e;
+                    maxHpFound = e.maxHp;
+                    bestTarget = e;
                 }
             }
+
             if (bestTarget) {
                 s.currentTetherTarget = bestTarget;
                 tethers.push(new TetherEffect(bestTarget, s));
             }
         }
-        return; 
+        return;
     }
 
-    if (s.currentCooldown > 0) { s.currentCooldown--; return; }
-    
+    if (s.currentCooldown > 0) {
+        s.currentCooldown--;
+        return;
+    }
+
     if (player.skill === 'missile') {
-        let initialTarget = null; let minDistSq = Infinity;
+        let initialTarget = null;
+        let minDistSq = Infinity;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             const m = e.size + 10;
             if (e.hp <= 0 || e.isFading || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
-            const dSq = (e.x - player.x)*(e.x - player.x) + (e.y - player.y)*(e.y - player.y); 
-            if (dSq < minDistSq) { minDistSq = dSq; initialTarget = e; }
+            const dSq = (e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                initialTarget = e;
+            }
         }
         for (let i = 0; i < s.count; i++) {
-            projectiles.push(new Projectile(player.x + (Math.random() - 0.5) * 50, player.y + (Math.random() - 0.5) * 50, initialTarget, s, false));
+            projectiles.push(new Projectile(
+                player.x + (Math.random() - 0.5) * 50,
+                player.y + (Math.random() - 0.5) * 50,
+                initialTarget,
+                s,
+                false
+            ));
         }
         s.currentCooldown = s.cooldown;
     } else if (player.skill === 'frost') {
@@ -876,31 +1275,88 @@ function updateUI() {
 }
 
 function levelUp() {
-    joystick.active = false; gameState = 'paused'; player.level++;
+    joystick.active = false;
+    gameState = 'paused';
+    player.level++;
     player.hp = Math.min(player.maxHp, player.hp + (player.maxHp / 6));
-    player.exp = 0; player.nextExp = Math.floor(player.nextExp * 1.5);
+    player.exp = 0;
+    player.nextExp = Math.floor(player.nextExp * 1.5);
     updateUI();
-    
+
     const screen = document.getElementById('upgrade-screen');
     const optionsDiv = document.getElementById('upgrade-options');
-    optionsDiv.innerHTML = ''; screen.classList.remove('hidden');
+    optionsDiv.innerHTML = '';
+    screen.classList.remove('hidden');
 
     const s = player.skillStats;
     if (player.level === 10) level10Frames = 0;
 
     if (player.level === 5) {
         document.getElementById('upgrade-title').innerText = "第 5 次進化：超級強化！";
-        let btn = document.createElement('button'); btn.className = 'btn btn-upgrade btn-special'; btn.innerText = s.specialUpgrade.desc;
-        btn.onclick = () => { s.specialUpgrade.apply(s); resumeGameAfterUpgrade(); };
+        let btn = document.createElement('button');
+        btn.className = 'btn btn-upgrade btn-special';
+        btn.innerText = s.specialUpgrade.desc;
+        btn.onclick = () => {
+            s.specialUpgrade.apply(s);
+            resumeGameAfterUpgrade();
+        };
         optionsDiv.appendChild(btn);
-    } else if (player.level === 10) {
+        return;
+    }
+
+    if (player.skill === 'summon') {
+        if (player.level === 10) {
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(三項皆可選，並可突破原有限制)";
+            const pathKeys = ['a', 'b', 'c'];
+            let clickedCount = 0;
+
+            pathKeys.forEach(key => {
+                let btn = document.createElement('button');
+                btn.className = 'btn btn-upgrade btn-special';
+                btn.innerText = getSummonUpgradeLabel(key, true);
+                btn.onclick = () => {
+                    applySummonUpgrade(key, true);
+                    btn.classList.add('hidden');
+                    clickedCount++;
+                    if (clickedCount === pathKeys.length) resumeGameAfterUpgrade();
+                };
+                optionsDiv.appendChild(btn);
+            });
+            return;
+        } else {
+            document.getElementById('upgrade-title').innerText = "技能強化！";
+
+            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 5);
+            availableKeys.sort(() => 0.5 - Math.random());
+            const selected = availableKeys.slice(0, Math.min(2, availableKeys.length));
+
+            selected.forEach(key => {
+                let btn = document.createElement('button');
+                btn.className = 'btn btn-upgrade';
+                btn.innerText = getSummonUpgradeLabel(key, false);
+                btn.onclick = () => {
+                    applySummonUpgrade(key, false);
+                    resumeGameAfterUpgrade();
+                };
+                optionsDiv.appendChild(btn);
+            });
+            return;
+        }
+    }
+
+    if (player.level === 10) {
         document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(將突破極限，獲得所有能力)";
-        let choices = [...s.upgrades]; let clickedCount = 0;
+        let choices = [...s.upgrades];
+        let clickedCount = 0;
         choices.forEach(choice => {
-            let btn = document.createElement('button'); btn.className = 'btn btn-upgrade btn-special'; btn.innerText = choice.desc;
+            let btn = document.createElement('button');
+            btn.className = 'btn btn-upgrade btn-special';
+            btn.innerText = choice.desc;
             btn.onclick = () => {
-                choice.apply(s); btn.classList.add('hidden'); clickedCount++;
-                if (clickedCount === choices.length) resumeGameAfterUpgrade(); 
+                choice.apply(s);
+                btn.classList.add('hidden');
+                clickedCount++;
+                if (clickedCount === choices.length) resumeGameAfterUpgrade();
             };
             optionsDiv.appendChild(btn);
         });
@@ -913,83 +1369,160 @@ function levelUp() {
         });
         available.sort(() => 0.5 - Math.random());
         available.slice(0, 2).forEach(choice => {
-            let btn = document.createElement('button'); btn.className = 'btn btn-upgrade'; btn.innerText = choice.desc;
-            btn.onclick = () => { choice.apply(s); resumeGameAfterUpgrade(); };
+            let btn = document.createElement('button');
+            btn.className = 'btn btn-upgrade';
+            btn.innerText = choice.desc;
+            btn.onclick = () => {
+                choice.apply(s);
+                resumeGameAfterUpgrade();
+            };
             optionsDiv.appendChild(btn);
         });
     }
 }
 
 function resumeGameAfterUpgrade() {
-    document.getElementById('upgrade-screen').classList.add('hidden'); gameState = 'playing';
+    document.getElementById('upgrade-screen').classList.add('hidden');
+    gameState = 'playing';
+
     if (player.level === 10) {
-        document.getElementById('status').innerText = "最終波！肅清所有怪物以獲勝！"; document.getElementById('status').style.color = "#FFEB3B";
+        document.getElementById('status').innerText = "最終波！肅清所有怪物以獲勝！";
+        document.getElementById('status').style.color = "#FFEB3B";
         enemies.push(new Enemy(1 + player.level * 0.3, 'boss'));
     }
 }
 
 function gameOver(isWin) {
-    joystick.active = false; gameState = 'gameover'; document.getElementById('game-over-screen').classList.remove('hidden');
+    joystick.active = false;
+    gameState = 'gameover';
+    document.getElementById('game-over-screen').classList.remove('hidden');
     document.getElementById('end-title').innerText = isWin ? "挑戰成功！你肅清了戰場！" : "挑戰失敗！";
     document.getElementById('end-title').style.color = isWin ? "#4CAF50" : "#F44336";
 }
 
 function drawConfetti() {
     if (confettis.length === 0) {
-        for (let i = 0; i < 150; i++) confettis.push({ x: Math.random() * canvas.width, y: Math.random() * -canvas.height, vx: (Math.random() - 0.5) * 4, vy: Math.random() * 3 + 2, size: Math.random() * 8 + 6, color: `hsl(${Math.random() * 360}, 100%, 50%)`, angle: Math.random() * 360, spin: (Math.random() - 0.5) * 10 });
+        for (let i = 0; i < 150; i++) {
+            confettis.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * -canvas.height,
+                vx: (Math.random() - 0.5) * 4,
+                vy: Math.random() * 3 + 2,
+                size: Math.random() * 8 + 6,
+                color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+                angle: Math.random() * 360,
+                spin: (Math.random() - 0.5) * 10
+            });
+        }
     }
+
     confettis.forEach(c => {
-        c.x += c.vx; c.y += c.vy; c.angle += c.spin;
-        ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle * Math.PI / 180); ctx.fillStyle = c.color; ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 0.6); ctx.restore();
-        if (c.y > canvas.height) { c.y = -10; c.x = Math.random() * canvas.width; }
+        c.x += c.vx;
+        c.y += c.vy;
+        c.angle += c.spin;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.angle * Math.PI / 180);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 0.6);
+        ctx.restore();
+        if (c.y > canvas.height) {
+            c.y = -10;
+            c.x = Math.random() * canvas.width;
+        }
     });
 }
 
 function drawJoystick() {
     if (!joystick.active) return;
-    ctx.save(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fillStyle = '#555'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-    let dx = joystick.currentX - joystick.startX; let dy = joystick.currentY - joystick.startY; const dist = Math.hypot(dx, dy);
-    if (dist > joystick.maxRadius) { dx = (dx / dist) * joystick.maxRadius; dy = (dy / dist) * joystick.maxRadius; }
-    ctx.beginPath(); ctx.arc(joystick.startX + dx, joystick.startY + dy, 20, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#555';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    let dx = joystick.currentX - joystick.startX;
+    let dy = joystick.currentY - joystick.startY;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > joystick.maxRadius) {
+        dx = (dx / dist) * joystick.maxRadius;
+        dy = (dy / dist) * joystick.maxRadius;
+    }
+
+    ctx.beginPath();
+    ctx.arc(joystick.startX + dx, joystick.startY + dy, 20, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.restore();
 }
 
 function gameLoop() {
     if (gameState === 'gameover') {
         if (player.hp > 0) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            gems.forEach(g => g.draw()); healDrops.forEach(h => h.draw()); projectiles.forEach(p => p.draw()); effects.forEach(e => e.draw()); enemies.forEach(e => e.draw());
-            tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); damageTexts.forEach(dt => dt.draw());
-            ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🧙', player.x, player.y);
-            drawConfetti(); 
+            gems.forEach(g => g.draw());
+            healDrops.forEach(h => h.draw());
+            projectiles.forEach(p => p.draw());
+            effects.forEach(e => e.draw());
+            enemies.forEach(e => e.draw());
+            tethers.forEach(t => t.draw());
+            summons.forEach(s => s.draw());
+            damageTexts.forEach(dt => dt.draw());
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🧙', player.x, player.y);
+            drawConfetti();
         }
-        requestAnimationFrame(gameLoop); return;
+        requestAnimationFrame(gameLoop);
+        return;
     }
 
     if (gameState !== 'playing') {
-        if(gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop); return;
+        if (gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop);
+        return;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let moveX = 0; let moveY = 0;
-    if (keys['a'] || keys['arrowleft']) moveX -= 1; if (keys['d'] || keys['arrowright']) moveX += 1;
-    if (keys['w'] || keys['arrowup']) moveY -= 1; if (keys['s'] || keys['arrowdown']) moveY += 1;
+    let moveX = 0;
+    let moveY = 0;
+    if (keys['a'] || keys['arrowleft']) moveX -= 1;
+    if (keys['d'] || keys['arrowright']) moveX += 1;
+    if (keys['w'] || keys['arrowup']) moveY -= 1;
+    if (keys['s'] || keys['arrowdown']) moveY += 1;
+
     if (joystick.active) {
-        const jx = joystick.currentX - joystick.startX; const jy = joystick.currentY - joystick.startY; const dist = Math.hypot(jx, jy);
-        if (dist > 5) { moveX = jx / dist; moveY = jy / dist; }
+        const jx = joystick.currentX - joystick.startX;
+        const jy = joystick.currentY - joystick.startY;
+        const dist = Math.hypot(jx, jy);
+        if (dist > 5) {
+            moveX = jx / dist;
+            moveY = jy / dist;
+        }
     }
+
     if (moveX !== 0 || moveY !== 0) {
-        const dist = Math.hypot(moveX, moveY); const nx = (moveX / dist) * player.speed; const ny = (moveY / dist) * player.speed;
+        const dist = Math.hypot(moveX, moveY);
+        const nx = (moveX / dist) * player.speed;
+        const ny = (moveY / dist) * player.speed;
+
         if (player.x + nx > player.size && player.x + nx < canvas.width - player.size) player.x += nx;
         if (player.y + ny > player.size && player.y + ny < canvas.height - player.size) player.y += ny;
     }
 
     fireSkill();
     frameCount++;
-    
+
     let stopSpawning = false;
     if (player.level >= 10) {
-        level10Frames += bossIsDead ? 2 : 1; stopSpawning = level10Frames >= 2400;
+        level10Frames += bossIsDead ? 2 : 1;
+        stopSpawning = level10Frames >= 2400;
         let spawnRate = bossIsDead ? 8 : 16;
         if (!stopSpawning) {
             if (frameCount % spawnRate === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'normal'));
@@ -1001,44 +1534,71 @@ function gameLoop() {
         if (player.level >= 5 && frameCount % (spawnRate * 4) === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'mini'));
     }
 
-    if (gems.length > 200) gems.shift(); if (healDrops.length > 50) healDrops.shift();
+    if (gems.length > 200) gems.shift();
+    if (healDrops.length > 50) healDrops.shift();
 
     for (let i = gems.length - 1; i >= 0; i--) if (!gems[i].update()) gems.splice(i, 1);
     for (let i = healDrops.length - 1; i >= 0; i--) if (!healDrops[i].update()) healDrops.splice(i, 1);
     for (let i = projectiles.length - 1; i >= 0; i--) if (!projectiles[i].update()) projectiles.splice(i, 1);
     for (let i = effects.length - 1; i >= 0; i--) if (!effects[i].update()) effects.splice(i, 1);
     for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
-    
+
     for (let i = summons.length - 1; i >= 0; i--) {
         if (!summons[i].update()) {
-            if(summons[i].target && summons[i].target.tauntedBy === summons[i]) summons[i].target.tauntedBy = null;
+            if (summons[i].target && summons[i].target.tauntedBy === summons[i]) summons[i].target.tauntedBy = null;
             summons.splice(i, 1);
         }
     }
-    for (let i = tethers.length - 1; i >= 0; i--) if (!tethers[i].update()) tethers.splice(i, 1);
 
-    gems.forEach(g => g.draw()); healDrops.forEach(h => h.draw()); projectiles.forEach(p => p.draw()); effects.forEach(e => e.draw());
-    tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); 
+    for (let i = tethers.length - 1; i >= 0; i--) {
+        if (!tethers[i].update()) tethers.splice(i, 1);
+    }
+
+    gems.forEach(g => g.draw());
+    healDrops.forEach(h => h.draw());
+    projectiles.forEach(p => p.draw());
+    effects.forEach(e => e.draw());
+    tethers.forEach(t => t.draw());
+    summons.forEach(s => s.draw());
 
     for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].update(); enemies[i].draw();
+        enemies[i].update();
+        enemies[i].draw();
+
         if (enemies[i].hp <= 0 && !enemies[i].isFading) {
             if (enemies[i].type === 'boss') bossIsDead = true;
+
             let gemCount = enemies[i].type === 'boss' ? 30 : (enemies[i].type === 'mini' ? 5 : 1);
-            for (let g = 0; g < gemCount; g++) gems.push(new Gem(enemies[i].x + (Math.random() * 20 - 10), enemies[i].y + (Math.random() * 20 - 10)));
+            for (let g = 0; g < gemCount; g++) {
+                gems.push(new Gem(
+                    enemies[i].x + (Math.random() * 20 - 10),
+                    enemies[i].y + (Math.random() * 20 - 10)
+                ));
+            }
+
             if (enemies[i].type === 'normal') {
                 normalKillCount++;
-                if (normalKillCount >= 10) { healDrops.push(new HealDrop(enemies[i].x, enemies[i].y)); normalKillCount = 0; }
+                if (normalKillCount >= 10) {
+                    healDrops.push(new HealDrop(enemies[i].x, enemies[i].y));
+                    normalKillCount = 0;
+                }
             }
+
             enemies.splice(i, 1);
         }
     }
-    
+
     damageTexts.forEach(dt => dt.draw());
 
-    ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🧙', player.x, player.y);
-    ctx.fillStyle = '#F44336'; ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
-    ctx.fillStyle = '#4CAF50'; ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
+    ctx.font = '30px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧙', player.x, player.y);
+
+    ctx.fillStyle = '#F44336';
+    ctx.fillRect(player.x - 15, player.y - 25, 30, 5);
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
 
     drawJoystick();
 
