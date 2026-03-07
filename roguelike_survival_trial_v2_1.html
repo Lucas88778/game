@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.1 (召喚七階平衡版)</title>
+<title>Roguelike 生存：極限試煉 v6.2 (召喚狂暴平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -228,36 +228,37 @@ const joystick = {
     maxRadius: 50
 };
 
+// 召喚系階級設定
 const summonTierTables = {
     a: [
-        { spawnInterval: 250, maxHounds: 4 },
-        { spawnInterval: 232, maxHounds: 4 },
-        { spawnInterval: 214, maxHounds: 5 },
-        { spawnInterval: 196, maxHounds: 5 },
-        { spawnInterval: 178, maxHounds: 5 },
-        { spawnInterval: 160, maxHounds: 6 },
-        { spawnInterval: 142, maxHounds: 6 },
-        { spawnInterval: 124, maxHounds: 6 }
+        { spawnInterval: 300, maxHounds: 1 },
+        { spawnInterval: 282, maxHounds: 2 },
+        { spawnInterval: 264, maxHounds: 3 },
+        { spawnInterval: 246, maxHounds: 4 },
+        { spawnInterval: 228, maxHounds: 5 },
+        { spawnInterval: 210, maxHounds: 6 },
+        { spawnInterval: 192, maxHounds: 7 },
+        { spawnInterval: 174, maxHounds: 8 } // 破限預留
     ],
     b: [
-        { hp: 110, atk: 5, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
-        { hp: 124, atk: 6, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
-        { hp: 138, atk: 6, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
-        { hp: 152, atk: 7, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
-        { hp: 166, atk: 7, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
-        { hp: 180, atk: 8, attackInterval: 28, speed: 3.45, damageReduction: 0.20 },
-        { hp: 194, atk: 8, attackInterval: 27, speed: 3.45, damageReduction: 0.20 },
-        { hp: 208, atk: 9, attackInterval: 27, speed: 3.45, damageReduction: 0.20 }
+        { hp: 120, atk: 5, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlust: false },
+        { hp: 136, atk: 6, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlust: false },
+        { hp: 152, atk: 6, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlust: false },
+        { hp: 168, atk: 7, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlust: false },
+        { hp: 184, atk: 7, attackInterval: 28, damageReduction: 0.10, speed: 3.45, bloodlust: true },
+        { hp: 200, atk: 8, attackInterval: 28, damageReduction: 0.20, speed: 3.45, bloodlust: true },
+        { hp: 216, atk: 8, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlust: true },
+        { hp: 232, atk: 9, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlust: true }
     ],
     c: [
-        { convertTime: 420, frogHp: 190, frogAtk: 9,  frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 58, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 396, frogHp: 212, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 62, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 372, frogHp: 234, frogAtk: 10, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 66, poisonInterval: 23, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 348, frogHp: 256, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 70, poisonInterval: 23, poisonDamage: 3, poisonBossDamage: 2 },
-        { convertTime: 324, frogHp: 278, frogAtk: 11, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 74, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 2 },
-        { convertTime: 300, frogHp: 300, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 78, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 3 },
-        { convertTime: 276, frogHp: 322, frogAtk: 12, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 82, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 3 },
-        { convertTime: 252, frogHp: 344, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 86, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 4 }
+        { convertTime: 420, frogHp: 210, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 1, explosionDamage: 18 },
+        { convertTime: 394, frogHp: 234, frogAtk: 11, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 74, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 1, explosionDamage: 18 },
+        { convertTime: 368, frogHp: 258, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 78, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 2, explosionDamage: 18 },
+        { convertTime: 342, frogHp: 282, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 82, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 2, explosionDamage: 22 },
+        { convertTime: 316, frogHp: 306, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 86, poisonInterval: 20, poisonDamage: 5, poisonBossDamage: 3, explosionDamage: 22 },
+        { convertTime: 290, frogHp: 330, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 90, poisonInterval: 20, poisonDamage: 6, poisonBossDamage: 3, explosionDamage: 26 },
+        { convertTime: 264, frogHp: 354, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 94, poisonInterval: 19, poisonDamage: 6, poisonBossDamage: 4, explosionDamage: 26 },
+        { convertTime: 238, frogHp: 378, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 7, poisonRadius: 98, poisonInterval: 19, poisonDamage: 7, poisonBossDamage: 4, explosionDamage: 30 }
     ]
 };
 
@@ -322,7 +323,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -35%',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -40%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -347,8 +348,9 @@ function recalcSummonStats(s) {
     s.houndHp = b.hp;
     s.houndAtk = b.atk;
     s.houndAttackInterval = b.attackInterval;
-    s.houndSpeed = b.speed;
+    s.houndBaseSpeed = b.speed;
     s.houndDamageReduction = b.damageReduction;
+    s.houndBloodlust = b.bloodlust;
 
     s.tetherDuration = c.convertTime;
     s.tetherSlow = 0.15;
@@ -356,15 +358,16 @@ function recalcSummonStats(s) {
     s.frogHp = c.frogHp;
     s.frogAtk = c.frogAtk;
     s.frogAttackInterval = c.frogAttackInterval;
-    s.frogSpeed = c.frogSpeed;
+    s.frogBaseSpeed = c.frogSpeed;
     s.maxFrogs = c.maxFrogs;
 
     s.poisonRadius = c.poisonRadius;
     s.poisonInterval = c.poisonInterval;
     s.poisonDamage = c.poisonDamage;
     s.poisonBossDamage = c.poisonBossDamage;
+    s.explosionDamage = c.explosionDamage;
 
-    s.summonDamageReduction = s.isSpecial ? 0.35 : 0;
+    s.summonDamageReduction = s.isSpecial ? 0.40 : 0;
 }
 
 function healExistingSummonsByRatio(ratio) {
@@ -412,7 +415,10 @@ function getSummonUpgradeLabel(pathKey) {
         const next = summonTierTables.b[nextTier];
         let extra = '';
         if (next.damageReduction !== cur.damageReduction) {
-            extra = `\n獵犬承受接觸傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
+            extra += `\n獵犬承受傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
+        }
+        if (!cur.bloodlust && next.bloodlust) {
+            extra += `\n新增：嗜血狂暴 (擊殺重置攻擊並加速)`;
         }
         return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
     }
@@ -428,7 +434,13 @@ function getSummonUpgradeLabel(pathKey) {
         if (player.skillStats.isSpecial) {
             poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
         }
-        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}\n現存召喚物回復 25% 最大生命`;
+        let explosionText = '';
+        if (next.explosionDamage !== cur.explosionDamage) {
+            explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} → ${next.explosionDamage}`;
+        } else if (currentTier === 0) {
+            explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} (不變)`;
+        }
+        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 🐸 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}${explosionText}\n現存召喚物回復 25% 最大生命`;
     }
 
     return pathName;
@@ -569,6 +581,29 @@ class TransformPoof {
         ctx.fillStyle = '#8BC34A';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+class PoisonExplosion {
+    constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.life = 20;
+        this.maxLife = 20;
+    }
+    update() {
+        this.life--;
+        return this.life > 0;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = (this.life / this.maxLife) * 0.5;
+        ctx.fillStyle = '#b2ff59';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * (1 - this.life / this.maxLife) + this.radius * 0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
     }
@@ -719,6 +754,7 @@ class Summon {
         this.targetOffset = { x: 0, y: 0 };
         this.attackCooldown = 0;
         this.poisonTimer = 0;
+        this.speedBuffTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
         this.refreshStats(true);
@@ -727,18 +763,18 @@ class Summon {
     refreshStats(resetHp = false) {
         const s = player.skillStats;
 
-        let newMaxHp, newAtk, newSpeed, newAttackInterval, newReduction;
+        let newMaxHp, newAtk, newBaseSpeed, newAttackInterval, newReduction;
 
         if (this.type === 'hound') {
             newMaxHp = s.houndHp;
             newAtk = s.houndAtk;
-            newSpeed = s.houndSpeed;
+            newBaseSpeed = s.houndBaseSpeed;
             newAttackInterval = s.houndAttackInterval;
             newReduction = Math.min(0.8, s.summonDamageReduction + s.houndDamageReduction);
         } else {
             newMaxHp = s.frogHp;
             newAtk = s.frogAtk;
-            newSpeed = s.frogSpeed;
+            newBaseSpeed = s.frogBaseSpeed;
             newAttackInterval = s.frogAttackInterval;
             newReduction = Math.min(0.8, s.summonDamageReduction);
         }
@@ -747,7 +783,7 @@ class Summon {
 
         this.maxHp = newMaxHp;
         this.atk = newAtk;
-        this.speed = newSpeed;
+        this.baseSpeed = newBaseSpeed;
         this.attackInterval = newAttackInterval;
         this.damageReduction = newReduction;
 
@@ -769,6 +805,12 @@ class Summon {
                 if (this.sourceEnemy) this.sourceEnemy.hp = 0;
             }
             return true;
+        }
+
+        let currentSpeed = this.baseSpeed;
+        if (this.speedBuffTimer > 0) {
+            this.speedBuffTimer--;
+            currentSpeed = this.baseSpeed * 1.5;
         }
 
         if (this.type === 'frog' && player.skillStats.isSpecial) {
@@ -876,9 +918,9 @@ class Summon {
             const dy = idealY - this.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-            if (dist > this.speed) {
-                this.x += (dx / dist) * this.speed;
-                this.y += (dy / dist) * this.speed;
+            if (dist > currentSpeed) {
+                this.x += (dx / dist) * currentSpeed;
+                this.y += (dy / dist) * currentSpeed;
             } else {
                 this.x = idealX;
                 this.y = idealY;
@@ -897,7 +939,15 @@ class Summon {
                         this.atk,
                         this.type === 'hound' ? '#FF9800' : '#8BC34A'
                     ));
-                    this.attackCooldown = this.attackInterval;
+
+                    // 嗜血狂暴判定：如果這下攻擊殺死敵人，且具備此能力
+                    if (this.target.hp <= 0 && this.type === 'hound' && player.skillStats.houndBloodlust) {
+                        this.attackCooldown = 0;
+                        this.speedBuffTimer = 30; // 狂奔 30 幀
+                        damageTexts.push(new DamageText(this.x, this.y - 15, "狂暴!", '#FF5252'));
+                    } else {
+                        this.attackCooldown = this.attackInterval;
+                    }
                 }
             }
         } else {
@@ -906,8 +956,8 @@ class Summon {
             const distSq = dx * dx + dy * dy;
             if (distSq > 100 * 100) {
                 const dist = Math.sqrt(distSq);
-                this.x += (dx / dist) * this.speed;
-                this.y += (dy / dist) * this.speed;
+                this.x += (dx / dist) * currentSpeed;
+                this.y += (dy / dist) * currentSpeed;
             }
         }
 
@@ -936,6 +986,18 @@ class Summon {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, player.skillStats.poisonRadius, 0, Math.PI * 2);
                 ctx.fill();
+            }
+
+            // 狂暴殘影特效
+            if (this.speedBuffTimer > 0) {
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.font = `${this.size * 2}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x - 5, this.y);
+                ctx.fillText(this.emoji, this.x + 5, this.y);
+                ctx.restore();
             }
 
             ctx.font = `${this.size * 2}px Arial`;
@@ -979,6 +1041,22 @@ class TetherEffect {
         if (!this.target || this.target.isFading) return;
 
         effects.push(new TransformPoof(this.target.x, this.target.y));
+
+        // 觸發轉化毒爆
+        let expDmg = player.skillStats.explosionDamage || 18;
+        let expRad = 60;
+        effects.push(new PoisonExplosion(this.target.x, this.target.y, expRad));
+        
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading) continue;
+            let dx = e.x - this.target.x;
+            let dy = e.y - this.target.y;
+            if (dx * dx + dy * dy <= expRad * expRad) {
+                e.hp -= expDmg;
+                damageTexts.push(new DamageText(e.x, e.y, expDmg, '#b2ff59'));
+            }
+        }
 
         let frogCount = summons.filter(s => s.type === 'frog').length;
         if (frogCount >= player.skillStats.maxFrogs) {
