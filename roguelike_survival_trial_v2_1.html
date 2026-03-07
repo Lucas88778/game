@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.3 (收益前置平滑版)</title>
+<title>Roguelike 生存：極限試煉 v7.0 (線性召喚重製版)</title>
 <style>
     body {
         margin: 0;
@@ -228,40 +228,6 @@ const joystick = {
     maxRadius: 50
 };
 
-// 召喚系階級設定 (收益前置 + 漸進解鎖)
-const summonTierTables = {
-    a: [
-        { spawnInterval: 300, maxHounds: 1 },
-        { spawnInterval: 270, maxHounds: 2 },
-        { spawnInterval: 240, maxHounds: 3 },
-        { spawnInterval: 215, maxHounds: 4 },
-        { spawnInterval: 195, maxHounds: 5 },
-        { spawnInterval: 180, maxHounds: 6 },
-        { spawnInterval: 165, maxHounds: 7 },
-        { spawnInterval: 150, maxHounds: 8 } // 破限預留
-    ],
-    b: [
-        { hp: 120, atk: 5, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlustCdr: 0.0 },
-        { hp: 140, atk: 6, attackInterval: 30, damageReduction: 0.00, speed: 3.45, bloodlustCdr: 0.3 },
-        { hp: 160, atk: 7, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.4 },
-        { hp: 175, atk: 8, attackInterval: 29, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.5 },
-        { hp: 190, atk: 8, attackInterval: 28, damageReduction: 0.10, speed: 3.45, bloodlustCdr: 0.6 },
-        { hp: 205, atk: 9, attackInterval: 28, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 0.8 },
-        { hp: 220, atk: 9, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 1.0 },
-        { hp: 235, atk: 10, attackInterval: 27, damageReduction: 0.20, speed: 3.45, bloodlustCdr: 1.0 }
-    ],
-    c: [
-        { convertTime: 420, frogHp: 210, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 1, explosionDamage: 9 },
-        { convertTime: 370, frogHp: 240, frogAtk: 11, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 74, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 1, explosionDamage: 12 },
-        { convertTime: 320, frogHp: 270, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 78, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 2, explosionDamage: 15 },
-        { convertTime: 280, frogHp: 290, frogAtk: 12, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 82, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 2, explosionDamage: 18 },
-        { convertTime: 250, frogHp: 310, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 86, poisonInterval: 20, poisonDamage: 5, poisonBossDamage: 3, explosionDamage: 21 },
-        { convertTime: 230, frogHp: 330, frogAtk: 13, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 90, poisonInterval: 20, poisonDamage: 6, poisonBossDamage: 3, explosionDamage: 24 },
-        { convertTime: 215, frogHp: 350, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 94, poisonInterval: 19, poisonDamage: 6, poisonBossDamage: 4, explosionDamage: 27 },
-        { convertTime: 200, frogHp: 370, frogAtk: 14, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 7, poisonRadius: 98, poisonInterval: 19, poisonDamage: 7, poisonBossDamage: 4, explosionDamage: 30 }
-    ]
-};
-
 const skillDefinitions = {
     missile: {
         id: 'missile',
@@ -313,17 +279,16 @@ const skillDefinitions = {
         currentTetherTarget: null,
         houndSpawnTimer: 0,
         tetherSlow: 0.15,
-        summonDamageReduction: 0,
         pathTiers: { a: 0, b: 0, c: 0 },
         pathNames: {
-            a: '🐕召喚加速',
-            b: '🐕獵犬強化',
-            c: '轉化加速＋🐸強化'
+            a: '🐕獵犬強化',
+            b: '🐸青蛙強化',
+            c: '施法+上限+毒強化'
         },
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -40%',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖大範圍毒霧與持續毒傷，所有召喚物承受接觸傷害 -40%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -333,39 +298,33 @@ const skillDefinitions = {
     }
 };
 
+// 線性計算邏輯
 function recalcSummonStats(s) {
-    const aTier = Math.min(s.pathTiers.a, 7);
-    const bTier = Math.min(s.pathTiers.b, 7);
-    const cTier = Math.min(s.pathTiers.c, 7);
+    const a = Math.min(s.pathTiers.a, 8);
+    const b = Math.min(s.pathTiers.b, 8);
+    const c = Math.min(s.pathTiers.c, 8);
 
-    const a = summonTierTables.a[aTier];
-    const b = summonTierTables.b[bTier];
-    const c = summonTierTables.c[cTier];
+    s.maxHounds = 3 + c;
+    s.maxFrogs = 4 + c;
+    
+    s.spawnInterval = Math.max(60, 240 - (c * 15));
+    s.tetherDuration = Math.max(120, 360 - (c * 30));
 
-    s.spawnInterval = a.spawnInterval;
-    s.maxHounds = a.maxHounds;
+    s.houndHp = 120 + (a * 25);
+    s.houndAtk = 6 + (a * 3);
+    s.houndAttackInterval = 30; // 攻速固定
+    s.houndBaseSpeed = 3.45;
+    
+    s.frogHp = 150 + (b * 35);
+    s.frogAtk = 10 + (b * 5);
+    s.frogAttackInterval = 29; // 攻速固定
+    s.frogBaseSpeed = 3.35;
 
-    s.houndHp = b.hp;
-    s.houndAtk = b.atk;
-    s.houndAttackInterval = b.attackInterval;
-    s.houndBaseSpeed = b.speed;
-    s.houndDamageReduction = b.damageReduction;
-    s.houndBloodlustCdr = b.bloodlustCdr;
-
-    s.tetherDuration = c.convertTime;
-    s.tetherSlow = 0.15;
-
-    s.frogHp = c.frogHp;
-    s.frogAtk = c.frogAtk;
-    s.frogAttackInterval = c.frogAttackInterval;
-    s.frogBaseSpeed = c.frogSpeed;
-    s.maxFrogs = c.maxFrogs;
-
-    s.poisonRadius = c.poisonRadius;
-    s.poisonInterval = c.poisonInterval;
-    s.poisonDamage = c.poisonDamage;
-    s.poisonBossDamage = c.poisonBossDamage;
-    s.explosionDamage = c.explosionDamage;
+    s.poisonRadius = 90; // 統一半徑
+    s.poisonInterval = 20; 
+    s.poisonDamage = 3 + (c * 1);
+    s.explosionDamage = 12 + (c * 4);
+    s.poisonDoTDamage = 2 + (c * 1); // 離開毒圈後的 DoT 傷害
 
     s.summonDamageReduction = s.isSpecial ? 0.40 : 0;
 }
@@ -385,7 +344,7 @@ function refreshExistingSummons() {
 
 function applySummonUpgrade(pathKey) {
     const s = player.skillStats;
-    if (s.pathTiers[pathKey] >= 7) return false;
+    if (s.pathTiers[pathKey] >= 8) return false;
     s.pathTiers[pathKey] += 1;
     recalcSummonStats(s);
     refreshExistingSummons();
@@ -396,49 +355,25 @@ function applySummonUpgrade(pathKey) {
 function getSummonUpgradeLabel(pathKey) {
     const s = player.skillStats;
     const currentTier = s.pathTiers[pathKey];
-    if (currentTier >= 7) return null;
+    if (currentTier >= 8) return null;
     const nextTier = currentTier + 1;
     const pathName = s.pathNames[pathKey];
 
     if (pathKey === 'a') {
-        const cur = summonTierTables.a[currentTier];
-        const next = summonTierTables.a[nextTier];
-        let extra = '';
-        if (next.maxHounds !== cur.maxHounds) {
-            extra = `\n獵犬上限 ${cur.maxHounds} → ${next.maxHounds}`;
-        }
-        return `${pathName} [${currentTier}→${nextTier}]\n召喚間隔 ${cur.spawnInterval}f → ${next.spawnInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
+        return `${pathName} [${currentTier}→${nextTier}]\n🐕 HP +25 / 攻擊 +3\n現存召喚物回復 25% 最大生命`;
     }
 
     if (pathKey === 'b') {
-        const cur = summonTierTables.b[currentTier];
-        const next = summonTierTables.b[nextTier];
-        let extra = '';
-        if (next.damageReduction !== cur.damageReduction) {
-            extra += `\n獵犬承受傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
-        }
-        if (cur.bloodlustCdr === 0 && next.bloodlustCdr > 0) {
-            extra += `\n新增：擊殺後冷卻減免 ${(next.bloodlustCdr * 100).toFixed(0)}% 並短暫加速`;
-        } else if (next.bloodlustCdr > cur.bloodlustCdr) {
-            extra += `\n狂暴冷卻減免 ${(cur.bloodlustCdr * 100).toFixed(0)}% → ${(next.bloodlustCdr * 100).toFixed(0)}%`;
-        }
-        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
+        return `${pathName} [${currentTier}→${nextTier}]\n🐸 HP +35 / 攻擊 +5\n現存召喚物回復 25% 最大生命`;
     }
 
     if (pathKey === 'c') {
-        const cur = summonTierTables.c[currentTier];
-        const next = summonTierTables.c[nextTier];
-        let frogCapText = '';
-        if (next.maxFrogs !== cur.maxFrogs) {
-            frogCapText = `\n青蛙上限 ${cur.maxFrogs} → ${next.maxFrogs}`;
+        let text = `${pathName} [${currentTier}→${nextTier}]\n🐕與🐸 上限皆 +1\n施法牽引 -30f / 召喚 -15f\n毒爆傷害 +4`;
+        if (s.isSpecial) {
+            text += `\n毒圈傷害 +1 / 毒素 DoT +1`;
         }
-        let poisonText = '';
-        if (player.skillStats.isSpecial) {
-            poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
-        }
-        let explosionText = `\n轉化毒爆傷害 ${cur.explosionDamage} → ${next.explosionDamage}`;
-        
-        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 🐸 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}${explosionText}\n現存召喚物回復 25% 最大生命`;
+        text += `\n現存召喚物回復 25% 最大生命`;
+        return text;
     }
 
     return pathName;
@@ -649,10 +584,22 @@ class Enemy {
         this.isFading = false;
         this.fadeDuration = 45;
         this.fadeTimer = 0;
+
+        // 毒系 DoT 機制
+        this.poisonDoTTimer = 0;
     }
 
     update() {
         if (this.isFading) return;
+
+        // 結算 DoT
+        if (this.poisonDoTTimer > 0) {
+            this.poisonDoTTimer--;
+            if (this.poisonDoTTimer % 30 === 0 && player.skillStats.poisonDoTDamage) {
+                this.hp -= player.skillStats.poisonDoTDamage;
+                damageTexts.push(new DamageText(this.x, this.y, player.skillStats.poisonDoTDamage, '#00e676'));
+            }
+        }
 
         if (this.frozenTimer > 0) {
             this.frozenTimer--;
@@ -719,6 +666,11 @@ class Enemy {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
             ctx.fill();
+        } else if (this.poisonDoTTimer > 0) {
+            ctx.fillStyle = 'rgba(118, 255, 3, 0.3)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.2, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         ctx.font = `${this.size * 2}px Arial`;
@@ -752,7 +704,6 @@ class Summon {
         this.targetOffset = { x: 0, y: 0 };
         this.attackCooldown = 0;
         this.poisonTimer = 0;
-        this.speedBuffTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
         this.refreshStats(true);
@@ -768,13 +719,13 @@ class Summon {
             newAtk = s.houndAtk;
             newBaseSpeed = s.houndBaseSpeed;
             newAttackInterval = s.houndAttackInterval;
-            newReduction = Math.min(0.8, s.summonDamageReduction + s.houndDamageReduction);
+            newReduction = s.summonDamageReduction;
         } else {
             newMaxHp = s.frogHp;
             newAtk = s.frogAtk;
             newBaseSpeed = s.frogBaseSpeed;
             newAttackInterval = s.frogAttackInterval;
-            newReduction = Math.min(0.8, s.summonDamageReduction);
+            newReduction = s.summonDamageReduction;
         }
 
         const hpRatio = (this.maxHp && this.maxHp > 0) ? this.hp / this.maxHp : 1;
@@ -806,10 +757,6 @@ class Summon {
         }
 
         let currentSpeed = this.baseSpeed;
-        if (this.speedBuffTimer > 0) {
-            this.speedBuffTimer--;
-            currentSpeed = this.baseSpeed * 1.5;
-        }
 
         if (this.type === 'frog' && player.skillStats.isSpecial) {
             this.poisonTimer++;
@@ -822,14 +769,12 @@ class Summon {
                     const dx = e.x - this.x;
                     const dy = e.y - this.y;
                     if (dx * dx + dy * dy <= player.skillStats.poisonRadius * player.skillStats.poisonRadius) {
-                        const damage = (e.type === 'boss')
-                            ? player.skillStats.poisonBossDamage
-                            : player.skillStats.poisonDamage;
-                        e.hp -= damage;
+                        e.hp -= player.skillStats.poisonDamage;
                         damageTexts.push(new DamageText(
-                            e.x, e.y, damage,
-                            e.type === 'boss' ? '#A5D6A7' : '#76FF03'
+                            e.x, e.y, player.skillStats.poisonDamage, '#76FF03'
                         ));
+                        // 附加/刷新 DoT (離開毒圈後會持續 120f)
+                        e.poisonDoTTimer = 120;
                     }
                 }
             }
@@ -937,16 +882,7 @@ class Summon {
                         this.atk,
                         this.type === 'hound' ? '#FF9800' : '#8BC34A'
                     ));
-
-                    // 嗜血狂暴判定：如果殺死敵人，且具備此能力，則依比例縮短冷卻 (加入 ICD 10 幀防呆)
-                    if (this.target.hp <= 0 && this.type === 'hound' && player.skillStats.houndBloodlustCdr > 0) {
-                        let reducedCooldown = this.attackInterval * (1 - player.skillStats.houndBloodlustCdr);
-                        this.attackCooldown = Math.max(10, Math.floor(reducedCooldown)); 
-                        this.speedBuffTimer = 30; // 狂奔 30 幀
-                        damageTexts.push(new DamageText(this.x, this.y - 15, "狂暴!", '#FF5252'));
-                    } else {
-                        this.attackCooldown = this.attackInterval;
-                    }
+                    this.attackCooldown = this.attackInterval;
                 }
             }
         } else {
@@ -985,18 +921,6 @@ class Summon {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, player.skillStats.poisonRadius, 0, Math.PI * 2);
                 ctx.fill();
-            }
-
-            // 狂暴殘影特效
-            if (this.speedBuffTimer > 0) {
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                ctx.font = `${this.size * 2}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(this.emoji, this.x - 5, this.y);
-                ctx.fillText(this.emoji, this.x + 5, this.y);
-                ctx.restore();
             }
 
             ctx.font = `${this.size * 2}px Arial`;
@@ -1041,9 +965,8 @@ class TetherEffect {
 
         effects.push(new TransformPoof(this.target.x, this.target.y));
 
-        // 觸發轉化毒爆
-        let expDmg = player.skillStats.explosionDamage || 9;
-        let expRad = 60;
+        let expDmg = player.skillStats.explosionDamage || 12;
+        let expRad = player.skillStats.poisonRadius || 90; // 與毒圈半徑一致
         effects.push(new PoisonExplosion(this.target.x, this.target.y, expRad));
         
         for (let i = 0; i < enemies.length; i++) {
@@ -1054,6 +977,7 @@ class TetherEffect {
             if (dx * dx + dy * dy <= expRad * expRad) {
                 e.hp -= expDmg;
                 damageTexts.push(new DamageText(e.x, e.y, expDmg, '#b2ff59'));
+                if(player.skillStats.isSpecial) e.poisonDoTTimer = 120; // 爆炸也能附加 DoT
             }
         }
 
@@ -1471,8 +1395,8 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(目前仍未滿階的三方向可全部取得)";
-            const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 7);
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(尚未達到8階極限的能力可全部取得)";
+            const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
                 resumeGameAfterUpgrade();
@@ -1496,7 +1420,7 @@ function levelUp() {
         } else {
             document.getElementById('upgrade-title').innerText = "技能強化！";
 
-            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 7);
+            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
             availableKeys.sort(() => 0.5 - Math.random());
             const selected = availableKeys.slice(0, Math.min(2, availableKeys.length));
 
@@ -1515,6 +1439,7 @@ function levelUp() {
         }
     }
 
+    // 其他技能原本的升級邏輯
     if (player.level === 10) {
         document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(將突破極限，獲得所有能力)";
         let choices = [...s.upgrades];
