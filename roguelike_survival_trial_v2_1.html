@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.3 (刺客獵犬版)</title>
+<title>Roguelike 生存：極限試煉 v7.5 (閃電刺客平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -301,17 +301,18 @@ function recalcSummonStats(s) {
     s.maxHounds = 1 + c;
     s.maxFrogs = 3 + c;
     
-    s.spawnInterval = Math.max(60, 360 - (c * 20)); 
+    s.spawnInterval = Math.max(60, 300 - (c * 20)); 
     s.tetherDuration = Math.max(120, 480 - (c * 30)); 
 
-    // 獵犬：刺客/戰士 (高ATK, 跑速疊加, HP 適中確保會死)
-    s.houndHp = 180 + (a * 15);
+    // 獵犬：閃電刺客 (高跑速、高爆發、脆皮)
+    s.houndHp = 150 + (a * 15);
     s.houndAtk = 12 + (a * 6);
     s.houndAttackInterval = 30; 
-    s.houndBaseSpeed = 3.45 + (a * 0.2); // 每次升級 +0.2 移動速度
+    s.houndBaseSpeed = 4.0 + (a * 0.5); 
     
-    // 青蛙：坦克/群傷 (高HP, 但會被海死, 毒增傷)
-    s.frogHp = 250 + (b * 40);
+    // 青蛙：重裝法坦 (超高血量)
+    // 🐸初始HP下修為 180，每次升級 +50
+    s.frogHp = 180 + (b * 50);
     s.frogAtk = 6 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
