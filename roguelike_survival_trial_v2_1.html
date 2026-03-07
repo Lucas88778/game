@@ -135,18 +135,19 @@ const skillDefinitions = {
     },
     summon: {
         id: 'summon', name: '召喚法術',
-        tetherDuration: 600, 
-        fearRadius: 60,
+        tetherDuration: 540, 
+        fearRadius: 70,
         fearCooldown: 180, 
         summonBonusHp: 0,
         summonBonusAtk: 0,
+        tetherDamage: 0, 
         isSpecial: false,
         houndSpawnTimer: 0,
         currentTetherTarget: null,
         upgrades: [
-            { id: 'u1', desc: '更快控制敵人', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
-            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
-            { id: 'u3', desc: '恐懼擴散', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
+            { id: 'u1', desc: '更快控制敵人', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 45) },
+            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 20; s.summonBonusAtk += 4; } },
+            { id: 'u3', desc: '牽引線傷害 (持續傷害)', apply: (s) => { s.tetherDamage += 2; } }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
     }
@@ -191,8 +192,7 @@ function startGame(skillId) {
     level10Frames = 0; bossIsDead = false;
 
     if (skillId === 'summon') {
-        summons.push(new Summon(player.x - 20, player.y - 30, 'hound'));
-        summons.push(new Summon(player.x + 20, player.y - 30, 'hound'));
+        summons.push(new Summon(player.x, player.y - 30, 'hound'));
     }
     
     document.getElementById('start-screen').classList.add('hidden');
@@ -514,12 +514,18 @@ class Summon {
                     this.target = closest.enemy;
                     let c = closest.count;
                     let hitDist = this.size + this.target.size;
+                    let overlapDist = this.size; 
                     let yOff = 0;
                     
-                    if (c === 1) yOff = -hitDist * 0.8;
-                    else if (c === 2) yOff = hitDist * 0.8;
-                    else if (c === 3) yOff = -hitDist * 1.6;
-                    else if (c === 4) yOff = hitDist * 1.6;
+                    if (c === 1) yOff = -overlapDist;
+                    else if (c === 2) yOff = overlapDist;
+                    else if (c === 3) yOff = -overlapDist * 2;
+                    else if (c === 4) yOff = overlapDist * 2;
+                    else if (c === 5) yOff = -overlapDist * 3;
+                    else if (c === 6) yOff = overlapDist * 3;
+                    else if (c === 7) yOff = -overlapDist * 4;
+                    else if (c === 8) yOff = overlapDist * 4;
+                    else if (c === 9) yOff = -overlapDist * 5;
                     
                     this.targetOffset = { x: hitDist * 0.75, y: yOff };
                 }
@@ -596,10 +602,24 @@ class TetherEffect {
         this.duration = 0; 
         this.maxDuration = stats.tetherDuration;
         this.pulseTimer = 0; 
+        this.damageTimer = 0;
     }
     update() {
         if (!this.target || this.target.hp <= 0 || this.target.isFading) {
             this.convertToFrog(); return false;
+        }
+
+        if (this.stats.tetherDamage > 0) {
+            this.damageTimer++;
+            if (this.damageTimer >= 20) {
+                this.target.hp -= this.stats.tetherDamage;
+                damageTexts.push(new DamageText(this.target.x, this.target.y, this.stats.tetherDamage, '#ba68c8'));
+                this.damageTimer = 0;
+                
+                if (this.target.hp <= 0) {
+                    this.convertToFrog(); return false;
+                }
+            }
         }
         
         this.target.slowMultiplier = 0.5; 
@@ -633,7 +653,7 @@ class TetherEffect {
         effects.push(new TransformPoof(this.target.x, this.target.y));
         
         let frogCount = summons.filter(s => s.type === 'frog').length;
-        if (frogCount >= 4) {
+        if (frogCount >= 5) {
             let oldestFrogIndex = summons.findIndex(s => s.type === 'frog');
             if (oldestFrogIndex !== -1) {
                 let oldFrog = summons[oldestFrogIndex];
@@ -801,7 +821,7 @@ function fireSkill() {
         let houndCount = summons.filter(sum => sum.type === 'hound').length;
         if (houndCount < 5) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= 210) { 
+            if (s.houndSpawnTimer >= 180) { 
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
