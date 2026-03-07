@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.3 (索敵視野修正版)</title>
+<title>Roguelike 生存：極限試煉 v6.5 (蛙化毒師純粹版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -113,13 +113,13 @@ const skillDefinitions = {
     },
     summoner: {
         id: 'summoner', name: '召喚法術', 
-        controlRate: 1 / 6, 
+        controlRate: 1 / 6, // 【更新】6 秒控制完成
         houndMax: 3,
         houndCooldown: 300, 
         currentHoundCooldown: 300,
-        critChance: 0, 
-        dmgReduction: 0, 
-        slowRadius: 100, 
+        critChance: 0, // 爆擊率
+        dmgReduction: 0, // 減傷率
+        slowRadius: 100, // 緩速半徑
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '召喚物爆擊 (獲得25%雙倍傷害)', apply: (s) => s.critChance += 0.25 },
@@ -165,13 +165,13 @@ function startGame(skillId) {
     
     player.x = canvas.width / 2;
     player.y = canvas.height / 2;
-    player.maxHp = 100;
     player.hp = 100;
+    player.maxHp = 100;
     
     normalKillCount = 0; 
     healDrops = []; 
     confettis = [];
-    damageTexts = [];
+    damageTexts = []; 
     enemies = [];
     projectiles = [];
     effects = [];
@@ -179,7 +179,8 @@ function startGame(skillId) {
     markedEnemy = null; 
     level10Frames = 0;
     bossIsDead = false;
-    
+
+    // 【更新】召喚師開局 2 隻獵犬
     if (skillId === 'summoner') {
         minions.push(new Minion(player.x - 20, player.y + 20, 'hound')); 
         minions.push(new Minion(player.x + 20, player.y + 20, 'hound')); 
@@ -288,14 +289,15 @@ class Enemy {
         
         let hitDist = isTaunted ? (this.size + this.tauntedBy.size) : (player.size + this.size);
         
+        // 【更新】標記時定身，未標記時受結界緩速
         if (this === markedEnemy) {
-            // 定住不動
+            // 完全定住不動
         } else {
             let actualSpeed = this.baseSpeed * this.slowMultiplier;
             if (markedEnemy && player.skill === 'summoner') {
                 let sr = player.skillStats.slowRadius;
                 if ((this.x - markedEnemy.x)**2 + (this.y - markedEnemy.y)**2 < sr * sr) {
-                    actualSpeed *= 0.5; 
+                    actualSpeed *= 0.5; // 淡紫色結界緩速 50%
                 }
             }
             if (dist > hitDist * 0.5) {
@@ -317,6 +319,7 @@ class Enemy {
         }
     }
     draw() {
+        // 繪製標記怪的淡紫色緩速結界
         if (this === markedEnemy) {
             let sr = player.skillStats.slowRadius;
             ctx.fillStyle = 'rgba(180, 130, 255, 0.25)';
@@ -349,6 +352,7 @@ class Enemy {
             ctx.fillRect(this.x - 20, this.y - this.size - 15, 40, 6);
             ctx.fillStyle = '#9C27B0'; 
             ctx.fillRect(this.x - 20, this.y - this.size - 15, 40 * (this.controlValue / this.maxHp), 6);
+            // 標記改為 ⬇️
             ctx.font = `20px Arial`;
             ctx.fillText('⬇️', this.x, this.y - this.size - 25);
         }
@@ -365,14 +369,15 @@ class Minion {
         
         if (type === 'hound') {
             this.size = 12;
-            this.maxHp = 200; 
+            this.maxHp = 200; // 獵犬血量翻倍
             this.hp = 200;
             this.speed = 3.5;
             this.damage = 12;
             this.emoji = '🐕';
         } else {
+            // converted
             this.size = baseEnemy.size;
-            this.maxHp = baseEnemy.maxHp * 2; 
+            this.maxHp = baseEnemy.maxHp * 2; // 🐸血量翻倍
             this.hp = this.maxHp;
             this.speed = baseEnemy.baseSpeed;
             this.damage = (baseEnemy.type === 'mini' ? 20 : 10);
@@ -393,7 +398,7 @@ class Minion {
             let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 【修正：畫面外檢查】召喚物不會鎖定畫面外的敵人
+                // 【更新】畫面外限制，絕不鎖定螢幕外的敵人
                 if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
                 if (e === markedEnemy || e.tauntedBy !== null) continue;
                 
@@ -435,9 +440,10 @@ class Minion {
             }
         }
         
+        // 【機制】🐸的毒霧攻擊 (終極強化)
         let s = player.skillStats;
         if (this.type === 'converted' && s.isSpecial) {
-            if (frameCount % 20 === 0) { 
+            if (frameCount % 20 === 0) { // 每 1/3 秒觸發一次毒傷疊加
                 for (let i = 0; i < enemies.length; i++) {
                     let e = enemies[i];
                     if (e.hp <= 0) continue;
@@ -461,6 +467,7 @@ class Minion {
     draw() {
         let s = player.skillStats;
         if (this.type === 'converted' && s.isSpecial) {
+            // 繪製毒霧
             ctx.fillStyle = 'rgba(50, 200, 50, 0.15)';
             ctx.beginPath(); ctx.arc(this.x, this.y, 120, 0, Math.PI*2); ctx.fill();
         }
@@ -576,6 +583,52 @@ class FrostEffect {
     }
 }
 
+class Gem {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.size = 5;
+    }
+    update() {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy; 
+        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        const hitDist = player.size + this.size;
+        if (distSq < hitDist * hitDist) {
+            player.exp++;
+            updateUI();
+            if (player.exp >= player.nextExp && player.level < 10) levelUp();
+            return false;
+        }
+        return true;
+    }
+    draw() {
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+class HealDrop {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.size = 5;
+    }
+    update() {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < 6400) { this.x += dx * 0.1; this.y += dy * 0.1; }
+        const hitDist = player.size + this.size;
+        if (distSq < hitDist * hitDist) {
+            player.hp = Math.min(player.maxHp, player.hp + 20);
+            return false; 
+        }
+        return true;
+    }
+    draw() {
+        ctx.fillStyle = '#FF5252'; 
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
 function fireSkill() {
     const s = player.skillStats;
     
@@ -595,9 +648,8 @@ function fireSkill() {
             let maxHP = -1;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 【修正：畫面外檢查】召喚師不會牽線給畫面外的敵人
+                // 【限制】絕對不鎖定螢幕外的敵人
                 if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-
                 if (e.type !== 'boss' && e.maxHp > maxHP) {
                     maxHP = e.maxHp;
                     bestTarget = e;
@@ -613,8 +665,10 @@ function fireSkill() {
         }
         
         if (markedEnemy) {
+            // 【控制進度】6 秒控制完成 (60 幀 * 6 = 360，1/360 per frame)
             markedEnemy.controlValue += markedEnemy.maxHp * (s.controlRate / 60);
             
+            // 【更新】更粗更明顯的紫色雙層光束
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(player.x, player.y);
@@ -623,6 +677,7 @@ function fireSkill() {
             ctx.lineWidth = 5;
             ctx.setLineDash([10, 10]);
             ctx.stroke();
+            
             ctx.beginPath();
             ctx.moveTo(player.x, player.y);
             ctx.lineTo(markedEnemy.x, markedEnemy.y);
@@ -635,10 +690,8 @@ function fireSkill() {
             
             if (markedEnemy.controlValue >= markedEnemy.maxHp) {
                 minions.push(new Minion(markedEnemy.x, markedEnemy.y, 'converted', markedEnemy));
-                
                 let index = enemies.indexOf(markedEnemy);
                 if (index !== -1) enemies.splice(index, 1);
-                
                 markedEnemy = null;
             }
         }
@@ -800,8 +853,8 @@ function gameLoop() {
             healDrops.forEach(h => h.draw()); 
             projectiles.forEach(p => p.draw());
             effects.forEach(e => e.draw());
-            minions.forEach(m => m.draw()); 
             enemies.forEach(e => e.draw());
+            minions.forEach(m => m.draw());
             damageTexts.forEach(dt => dt.draw());
             
             ctx.font = '30px Arial';
@@ -867,14 +920,13 @@ function gameLoop() {
     for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
     for (let i = minions.length - 1; i >= 0; i--) if (!minions[i].update()) minions.splice(i, 1);
 
+    // 繪製順序修正：先畫標記緩速圈與怪物，再畫毒霧與召喚物，最後畫特效與數字
+    enemies.forEach(e => e.draw());
+    minions.forEach(m => m.draw()); 
     gems.forEach(g => g.draw());
     healDrops.forEach(h => h.draw()); 
     projectiles.forEach(p => p.draw());
     effects.forEach(e => e.draw());
-    
-    // 【繪製順序修正】讓標記緩速圈畫在底層，才不會蓋住怪物
-    enemies.forEach(e => e.draw());
-    minions.forEach(m => m.draw()); 
 
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update();
