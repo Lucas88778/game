@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.7 (蟲海覺醒版)</title>
+<title>Roguelike 生存：極限試煉 v7.9 (解除限制與除蟲版)</title>
 <style>
     body {
         margin: 0;
@@ -296,36 +296,44 @@ const skillDefinitions = {
 function recalcSummonStats(s) {
     const a = Math.min(s.pathTiers.a, 8);
     const b = Math.min(s.pathTiers.b, 8);
-    const c = Math.min(s.pathTiers.c, 8);
+    // C 路線不再限制上限，徹底解除封印！
+    const c = s.pathTiers.c; 
 
-    // 等級被動機制：奇數等級🐕+1，偶數等級🐸+1 (從Lv1開始算)
-    const passiveHounds = Math.floor((player.level + 1) / 2);
-    const passiveFrogs = Math.floor(player.level / 2);
+    // 階段性被動機制解算 (依據玩家進化等級)
+    let passiveHounds = 0;
+    let passiveHoundSpawnRed = 0;
+    let passiveFrogs = 0;
+    let passiveFrogConvRed = 0;
 
-    // 被動加速：🐕每多1被動減15f，🐸每多1被動減20f
-    const passiveHoundSpawnRed = passiveHounds * 15;
-    const passiveFrogConvRed = passiveFrogs * 20;
+    if (player.level >= 1) passiveHounds += 1;
+    if (player.level >= 2) passiveHoundSpawnRed += 30;
+    if (player.level >= 3) passiveFrogs += 1;
+    if (player.level >= 4) passiveFrogConvRed += 45;
+    if (player.level >= 5) passiveHounds += 1;
+    if (player.level >= 6) passiveHoundSpawnRed += 30;
+    if (player.level >= 7) passiveFrogs += 1;
+    if (player.level >= 8) passiveFrogConvRed += 45;
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
     
-    // 基礎300f，扣除被動與C路線加速 (設底線防呆)
+    // 基礎300f，扣除被動與C路線加速 (設底線防呆，避免變負數)
     s.spawnInterval = Math.max(30, 300 - passiveHoundSpawnRed - (c * 20)); 
     s.tetherDuration = Math.max(60, 480 - passiveFrogConvRed - (c * 30)); 
 
-    // 獵犬：閃電刺客
+    // 獵犬：閃電刺客 (高跑速、擊殺爆發跑速)
     s.houndHp = 150 + (a * 15);
     s.houndAtk = 12 + (a * 6);
     s.houndAttackInterval = 30; 
     s.houndBaseSpeed = 4.0 + (a * 0.5); 
     
-    // 青蛙：重裝法坦
+    // 青蛙：重裝法坦 (超高血量、大範圍毒圈)
     s.frogHp = 180 + (b * 50);
     s.frogAtk = 6 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
 
-    s.poisonRadius = 90; 
+    s.poisonRadius = 90 + (b * 5); // 每次升級毒圈半徑+5
     s.poisonInterval = 20; 
     s.poisonDamage = 3 + (b * 2); 
 
@@ -347,7 +355,8 @@ function refreshExistingSummons() {
 
 function applySummonUpgrade(pathKey) {
     const s = player.skillStats;
-    if (s.pathTiers[pathKey] >= 8) return false;
+    // 只有 a 和 b 有 8 階限制
+    if (pathKey !== 'c' && s.pathTiers[pathKey] >= 8) return false;
     s.pathTiers[pathKey] += 1;
     recalcSummonStats(s);
     refreshExistingSummons();
@@ -648,6 +657,9 @@ class Summon {
         this.targetOffset = { x: 0, y: 0 };
         this.attackCooldown = 0;
         this.poisonTimer = 0;
+        
+        // 獵犬擊殺加速狀態
+        this.killSpeedBuffTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
         this.refreshStats(true);
@@ -695,12 +707,20 @@ class Summon {
             if (this.sourceEnemy) this.sourceEnemy.fadeTimer = this.spawnTimer;
             if (this.spawnTimer >= this.spawnDuration) {
                 this.isSpawning = false;
-                if (this.sourceEnemy) this.sourceEnemy.hp = 0;
+                if (this.sourceEnemy) {
+                    this.sourceEnemy.hp = 0;
+                    // 【Bug修復關鍵】解除敵人的隱形漸隱狀態，讓主迴圈可以順利將其移除！
+                    this.sourceEnemy.isFading = false;
+                }
             }
             return true;
         }
 
         let currentSpeed = this.baseSpeed;
+        if (this.killSpeedBuffTimer > 0) {
+            currentSpeed += 1.0;
+            this.killSpeedBuffTimer--;
+        }
 
         if (this.type === 'frog' && player.skillStats.isSpecial) {
             this.poisonTimer++;
@@ -824,6 +844,12 @@ class Summon {
                         this.atk,
                         this.type === 'hound' ? '#FF9800' : '#8BC34A'
                     ));
+                    
+                    // 獵犬擊殺加速判斷
+                    if (this.target.hp <= 0 && this.type === 'hound') {
+                        this.killSpeedBuffTimer = 60;
+                    }
+                    
                     this.attackCooldown = this.attackInterval;
                 }
             }
@@ -863,6 +889,18 @@ class Summon {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, player.skillStats.poisonRadius, 0, Math.PI * 2);
                 ctx.fill();
+            }
+
+            // 獵犬擊殺加速殘影特效
+            if (this.type === 'hound' && this.killSpeedBuffTimer > 0) {
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.font = `${this.size * 2}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x - 5, this.y);
+                ctx.fillText(this.emoji, this.x + 5, this.y);
+                ctx.restore();
             }
 
             ctx.font = `${this.size * 2}px Arial`;
@@ -1297,7 +1335,6 @@ function levelUp() {
     player.exp = 0;
     player.nextExp = Math.floor(player.nextExp * 1.5);
     
-    // 等級提升時自動計算被動加成，但不直接補血
     if (player.skill === 'summon') {
         recalcSummonStats(player.skillStats);
         refreshExistingSummons();
@@ -1329,7 +1366,8 @@ function levelUp() {
     if (player.skill === 'summon') {
         if (player.level === 10) {
             document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！";
-            const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
+            // 只有 A 和 B 限制 8 階，C 路線無極限
+            const pathKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
                 resumeGameAfterUpgrade();
@@ -1353,7 +1391,7 @@ function levelUp() {
         } else {
             document.getElementById('upgrade-title').innerText = "技能強化！";
 
-            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 8);
+            const availableKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
             availableKeys.sort(() => 0.5 - Math.random());
             const selected = availableKeys.slice(0, Math.min(2, availableKeys.length));
 
