@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.5 (閃電刺客平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.7 (蟲海覺醒版)</title>
 <style>
     body {
         margin: 0;
@@ -283,7 +283,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n解鎖範圍毒圈，全召喚物承受接觸傷害 -40%',
+            desc: '超級強化：解鎖🐸毒圈+召喚物減傷40%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -298,20 +298,28 @@ function recalcSummonStats(s) {
     const b = Math.min(s.pathTiers.b, 8);
     const c = Math.min(s.pathTiers.c, 8);
 
-    s.maxHounds = 1 + c;
-    s.maxFrogs = 3 + c;
-    
-    s.spawnInterval = Math.max(60, 300 - (c * 20)); 
-    s.tetherDuration = Math.max(120, 480 - (c * 30)); 
+    // 等級被動機制：奇數等級🐕+1，偶數等級🐸+1 (從Lv1開始算)
+    const passiveHounds = Math.floor((player.level + 1) / 2);
+    const passiveFrogs = Math.floor(player.level / 2);
 
-    // 獵犬：閃電刺客 (高跑速、高爆發、脆皮)
+    // 被動加速：🐕每多1被動減15f，🐸每多1被動減20f
+    const passiveHoundSpawnRed = passiveHounds * 15;
+    const passiveFrogConvRed = passiveFrogs * 20;
+
+    s.maxHounds = 1 + passiveHounds + c;
+    s.maxFrogs = 3 + passiveFrogs + c;
+    
+    // 基礎300f，扣除被動與C路線加速 (設底線防呆)
+    s.spawnInterval = Math.max(30, 300 - passiveHoundSpawnRed - (c * 20)); 
+    s.tetherDuration = Math.max(60, 480 - passiveFrogConvRed - (c * 30)); 
+
+    // 獵犬：閃電刺客
     s.houndHp = 150 + (a * 15);
     s.houndAtk = 12 + (a * 6);
     s.houndAttackInterval = 30; 
     s.houndBaseSpeed = 4.0 + (a * 0.5); 
     
-    // 青蛙：重裝法坦 (超高血量)
-    // 🐸初始HP下修為 180，每次升級 +50
+    // 青蛙：重裝法坦
     s.frogHp = 180 + (b * 50);
     s.frogAtk = 6 + (b * 2);
     s.frogAttackInterval = 30; 
@@ -1288,6 +1296,13 @@ function levelUp() {
     player.hp = Math.min(player.maxHp, player.hp + (player.maxHp / 6));
     player.exp = 0;
     player.nextExp = Math.floor(player.nextExp * 1.5);
+    
+    // 等級提升時自動計算被動加成，但不直接補血
+    if (player.skill === 'summon') {
+        recalcSummonStats(player.skillStats);
+        refreshExistingSummons();
+    }
+    
     updateUI();
 
     const screen = document.getElementById('upgrade-screen');
