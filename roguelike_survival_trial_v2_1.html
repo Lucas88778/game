@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v5.7 (召喚物右側列陣版)</title>
+<title>Roguelike 生存：極限試煉 v5.8 (精準平衡與避戰機制版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -122,7 +122,8 @@ const skillDefinitions = {
         currentTetherTarget: null,
         upgrades: [
             { id: 'u1', desc: '更快控制敵人', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
-            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 20; s.summonBonusAtk += 4; } },
+            // 【更新】生命值 +15，攻擊力 +2
+            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
             { id: 'u3', desc: '恐懼擴散', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
@@ -359,22 +360,23 @@ class Enemy {
 }
 
 class Summon {
-    constructor(x, y, type, sourceEnemyAtk = 8, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
+    // 【更新】攻擊基底改為 6，血量改為 120
+    constructor(x, y, type, sourceEnemyAtk = 6, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
         this.x = x; this.y = y;
         this.type = type; 
         this.size = 15;
         const s = player.skillStats;
         
         if (type === 'hound') {
-            this.maxHp = 200 + (s ? s.summonBonusHp : 0);
+            this.maxHp = 120 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 8 + (s ? s.summonBonusAtk : 0);
+            this.atk = 6 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐕';
         } else if (type === 'frog') {
             this.maxHp = (sourceEnemyMaxHp * 1.5) + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 8 + (s ? s.summonBonusAtk : 0);
+            this.atk = 6 + (s ? s.summonBonusAtk : 0);
             this.speed = sourceEnemySpeed;
             this.emoji = '🐸';
         }
@@ -401,13 +403,22 @@ class Summon {
             }
         }
 
+        // 【更新】如果原本鎖定的目標突然被玩家牽線了，立刻放棄該目標
+        if (this.target && player.skillStats && this.target === player.skillStats.currentTetherTarget) {
+            this.target.tauntedBy = null;
+            this.target = null;
+        }
+
         if (!this.target || this.target.hp <= 0) {
             this.target = null;
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 const m = e.size + 10;
-                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+                // 【更新】新增避開牽線敵人的條件
+                let isTethered = player.skillStats && player.skillStats.currentTetherTarget === e;
+
+                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m || isTethered) continue;
                 
                 const dx = e.x - this.x; const dy = e.y - this.y;
                 const dSq = dx * dx + dy * dy;
@@ -422,7 +433,6 @@ class Summon {
         if (this.target) {
             const hitDist = this.size + this.target.size;
             
-            // 【機制更新】強制目標定位在敵人的右側，距離為碰撞距離的 0.75 倍 (稍微重疊 25%)
             const idealX = this.target.x + hitDist * 0.75;
             const idealY = this.target.y;
             
@@ -439,7 +449,6 @@ class Summon {
             }
             
             if (this.attackCooldown <= 0) {
-                // 為了保證移動到定位時也能順利咬擊，實際距離判定放寬
                 const actualDx = this.target.x - this.x;
                 const actualDy = this.target.y - this.y;
                 if (actualDx * actualDx + actualDy * actualDy < (hitDist * 1.2) * (hitDist * 1.2)) {
@@ -514,7 +523,20 @@ class TetherEffect {
     convertToFrog() {
         if (!this.target) return;
         effects.push(new TransformPoof(this.target.x, this.target.y));
-        summons.push(new Summon(this.target.x, this.target.y, 'frog', 8, this.target.maxHp, this.target.baseSpeed));
+        
+        // 【更新】確保青蛙數量不超過 4 隻
+        let frogCount = summons.filter(s => s.type === 'frog').length;
+        if (frogCount >= 4) {
+            let oldestFrogIndex = summons.findIndex(s => s.type === 'frog');
+            if (oldestFrogIndex !== -1) {
+                let oldFrog = summons[oldestFrogIndex];
+                // 釋放舊青蛙正在嘲諷的怪物
+                for (let e of enemies) if (e.tauntedBy === oldFrog) e.tauntedBy = null;
+                summons.splice(oldestFrogIndex, 1);
+            }
+        }
+
+        summons.push(new Summon(this.target.x, this.target.y, 'frog', 6, this.target.maxHp, this.target.baseSpeed));
         player.skillStats.currentTetherTarget = null; 
     }
     
