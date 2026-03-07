@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v5.5 (嚴格視野鎖定版)</title>
+<title>Roguelike 生存：極限試煉 v5.7 (召喚物右側列陣版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -113,16 +113,16 @@ const skillDefinitions = {
     summon: {
         id: 'summon', name: '召喚法術',
         tetherDuration: 600, 
-        fearRadius: 50,
-        fearCooldown: 240, 
+        fearRadius: 60,
+        fearCooldown: 180, 
         summonBonusHp: 0,
         summonBonusAtk: 0,
         isSpecial: false,
         houndSpawnTimer: 0,
         currentTetherTarget: null,
         upgrades: [
-            { id: 'u1', desc: '縮短控制時間', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
-            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
+            { id: 'u1', desc: '更快控制敵人', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
+            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 20; s.summonBonusAtk += 4; } },
             { id: 'u3', desc: '恐懼擴散', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
@@ -207,22 +207,31 @@ class FearRipple {
         this.x = x; this.y = y;
         this.maxRadius = maxRadius;
         this.radius = 0;
-        this.life = 25; 
-        this.maxLife = 25;
+        this.life = 35; 
+        this.maxLife = 35;
     }
     update() {
-        this.radius += this.maxRadius / this.maxLife;
+        let progress = 1 - (this.life / this.maxLife);
+        this.radius = this.maxRadius * (1 - Math.pow(1 - progress, 3));
         this.life--;
         return this.life > 0;
     }
     draw() {
         ctx.save();
-        ctx.globalAlpha = this.life / this.maxLife;
-        ctx.strokeStyle = 'rgba(216, 27, 96, 0.8)'; 
-        ctx.lineWidth = 4;
+        let alpha = this.life / this.maxLife;
+        ctx.globalAlpha = alpha;
+        
+        ctx.fillStyle = 'rgba(216, 27, 96, 0.3)'; 
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255, 64, 129, 0.9)'; 
+        ctx.lineWidth = 3 + (alpha * 5); 
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.stroke();
+        
         ctx.restore();
     }
 }
@@ -319,8 +328,10 @@ class Enemy {
         
         let actualSpeed = this.baseSpeed * this.slowMultiplier;
         
-        this.x += (dx / dist) * actualSpeed;
-        this.y += (dy / dist) * actualSpeed;
+        if (distSq > (targetHitDist * 0.9) * (targetHitDist * 0.9)) {
+            this.x += (dx / dist) * actualSpeed;
+            this.y += (dy / dist) * actualSpeed;
+        }
         
         this.slowMultiplier = 1.0; 
         
@@ -348,22 +359,22 @@ class Enemy {
 }
 
 class Summon {
-    constructor(x, y, type, sourceEnemyAtk = 5, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
+    constructor(x, y, type, sourceEnemyAtk = 8, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
         this.x = x; this.y = y;
         this.type = type; 
         this.size = 15;
         const s = player.skillStats;
         
         if (type === 'hound') {
-            this.maxHp = 150 + (s ? s.summonBonusHp : 0);
+            this.maxHp = 200 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 5 + (s ? s.summonBonusAtk : 0);
+            this.atk = 8 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐕';
         } else if (type === 'frog') {
             this.maxHp = (sourceEnemyMaxHp * 1.5) + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 5 + (s ? s.summonBonusAtk : 0); 
+            this.atk = 8 + (s ? s.summonBonusAtk : 0);
             this.speed = sourceEnemySpeed;
             this.emoji = '🐸';
         }
@@ -395,7 +406,9 @@ class Summon {
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this)) continue;
+                const m = e.size + 10;
+                if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+                
                 const dx = e.x - this.x; const dy = e.y - this.y;
                 const dSq = dx * dx + dy * dy;
                 if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
@@ -407,14 +420,29 @@ class Summon {
         }
 
         if (this.target) {
-            const dx = this.target.x - this.x; const dy = this.target.y - this.y;
-            const distSq = dx * dx + dy * dy; const dist = Math.sqrt(distSq) || 1;
             const hitDist = this.size + this.target.size;
             
-            if (distSq > hitDist * hitDist) {
-                this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed;
+            // 【機制更新】強制目標定位在敵人的右側，距離為碰撞距離的 0.75 倍 (稍微重疊 25%)
+            const idealX = this.target.x + hitDist * 0.75;
+            const idealY = this.target.y;
+            
+            const dx = idealX - this.x; 
+            const dy = idealY - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            
+            if (dist > this.speed) {
+                this.x += (dx / dist) * this.speed; 
+                this.y += (dy / dist) * this.speed;
             } else {
-                if (this.attackCooldown <= 0) {
+                this.x = idealX;
+                this.y = idealY;
+            }
+            
+            if (this.attackCooldown <= 0) {
+                // 為了保證移動到定位時也能順利咬擊，實際距離判定放寬
+                const actualDx = this.target.x - this.x;
+                const actualDy = this.target.y - this.y;
+                if (actualDx * actualDx + actualDy * actualDy < (hitDist * 1.2) * (hitDist * 1.2)) {
                     this.target.hp -= this.atk;
                     damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, '#FF9800'));
                     this.attackCooldown = 30; 
@@ -467,7 +495,7 @@ class TetherEffect {
                 if (e === this.target || e.hp <= 0) continue;
                 const dx = e.x - this.target.x; const dy = e.y - this.target.y;
                 if (dx*dx + dy*dy <= this.stats.fearRadius * this.stats.fearRadius) {
-                    e.fearTimer = 30; 
+                    e.fearTimer = 60; 
                     e.fearSourceX = this.target.x; e.fearSourceY = this.target.y;
                 }
             }
@@ -486,7 +514,7 @@ class TetherEffect {
     convertToFrog() {
         if (!this.target) return;
         effects.push(new TransformPoof(this.target.x, this.target.y));
-        summons.push(new Summon(this.target.x, this.target.y, 'frog', 5, this.target.maxHp, this.target.baseSpeed));
+        summons.push(new Summon(this.target.x, this.target.y, 'frog', 8, this.target.maxHp, this.target.baseSpeed));
         player.skillStats.currentTetherTarget = null; 
     }
     
@@ -549,7 +577,6 @@ class Projectile {
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 【核心修改】飛彈重新索敵加入嚴格邊界判定
                 const m = e.size + 10;
                 if (e.hp <= 0 || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
                 const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y); 
@@ -640,7 +667,7 @@ function fireSkill() {
     const s = player.skillStats;
     if (player.skill === 'summon') {
         let houndCount = summons.filter(sum => sum.type === 'hound').length;
-        if (houndCount < 3) {
+        if (houndCount < 2) {
             s.houndSpawnTimer++;
             if (s.houndSpawnTimer >= 480) { 
                 summons.push(new Summon(player.x, player.y, 'hound'));
@@ -654,7 +681,6 @@ function fireSkill() {
             let bestTarget = null; let maxHpFound = -1;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 【核心修改】牽線索敵加入嚴格邊界判定
                 const m = e.size + 10;
                 if (e.type === 'boss' || e.hp <= 0) continue; 
                 if (e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
@@ -677,7 +703,6 @@ function fireSkill() {
         let initialTarget = null; let minDistSq = Infinity;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
-            // 【核心修改】飛彈初次發射索敵加入嚴格邊界判定
             const m = e.size + 10;
             if (e.hp <= 0 || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
             const dSq = (e.x - player.x)*(e.x - player.x) + (e.y - player.y)*(e.y - player.y); 
