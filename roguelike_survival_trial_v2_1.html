@@ -397,17 +397,21 @@ class Summon {
         const s = player.skillStats;
         
         if (type === 'hound') {
-            this.maxHp = 160 + (s ? s.summonBonusHp : 0);
-            this.hp = this.maxHp;
-            this.atk = 8 + (s ? s.summonBonusAtk : 0);
-            this.speed = 3.5;
-            this.emoji = '🐕';
-        } else if (type === 'frog') {
             this.maxHp = 190 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 10 + (s ? s.summonBonusAtk : 0);
+            this.atk = 12 + (s ? s.summonBonusAtk : 0);
+            this.speed = 3.5;
+            this.emoji = '🐕';
+            this.isSpawning = true;
+            this.spawnTimer = 0;
+            this.spawnDuration = 45; 
+        } else if (type === 'frog') {
+            this.maxHp = 250 + (s ? s.summonBonusHp : 0);
+            this.hp = this.maxHp;
+            this.atk = 15 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐸';
+            this.isSpawning = false;
         }
         
         this.target = null;
@@ -416,6 +420,14 @@ class Summon {
     }
     
     update() {
+        if (this.isSpawning) {
+            this.spawnTimer++;
+            if (this.spawnTimer >= this.spawnDuration) {
+                this.isSpawning = false;
+            }
+            return true; 
+        }
+
         if (this.type === 'frog' && player.skillStats.isSpecial) {
             this.poisonTimer++;
             if (this.poisonTimer >= 20) { 
@@ -498,12 +510,25 @@ class Summon {
     }
     
     draw() {
-        if (this.type === 'frog' && player.skillStats.isSpecial) {
-            ctx.fillStyle = 'rgba(118, 255, 3, 0.2)'; ctx.beginPath(); ctx.arc(this.x, this.y, 80, 0, Math.PI*2); ctx.fill();
+        if (this.isSpawning) {
+            let progress = this.spawnTimer / this.spawnDuration;
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y + 10, 25 * progress, 10 * progress, 0, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 215, 0, ${1 - progress})`; 
+            ctx.fill();
+            
+            ctx.globalAlpha = progress;
+            ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
+            ctx.restore();
+        } else {
+            if (this.type === 'frog' && player.skillStats.isSpecial) {
+                ctx.fillStyle = 'rgba(118, 255, 3, 0.2)'; ctx.beginPath(); ctx.arc(this.x, this.y, 80, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
+            ctx.fillStyle = '#F44336'; ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
+            ctx.fillStyle = '#4CAF50'; ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
         }
-        ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
-        ctx.fillStyle = '#F44336'; ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
-        ctx.fillStyle = '#4CAF50'; ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
     }
 }
 
@@ -716,7 +741,7 @@ function fireSkill() {
         let houndCount = summons.filter(sum => sum.type === 'hound').length;
         if (houndCount < 5) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= 360) { 
+            if (s.houndSpawnTimer >= 300) { 
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
