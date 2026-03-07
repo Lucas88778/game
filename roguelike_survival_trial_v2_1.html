@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v5.3 (召喚法術降臨)</title>
+<title>Roguelike 生存：極限試煉 v5.5 (嚴格視野鎖定版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -68,8 +68,8 @@ let healDrops = [];
 let projectiles = [];
 let effects = [];
 let damageTexts = []; 
-let summons = []; // 召喚物陣列
-let tethers = []; // 牽線特效陣列
+let summons = []; 
+let tethers = []; 
 
 let level10Frames = 0;
 let bossIsDead = false;
@@ -112,18 +112,18 @@ const skillDefinitions = {
     },
     summon: {
         id: 'summon', name: '召喚法術',
-        tetherDuration: 600, // 10秒 = 600幀
+        tetherDuration: 600, 
         fearRadius: 50,
-        fearCooldown: 240, // 4秒
+        fearCooldown: 240, 
         summonBonusHp: 0,
         summonBonusAtk: 0,
         isSpecial: false,
         houndSpawnTimer: 0,
         currentTetherTarget: null,
         upgrades: [
-            { id: 'u1', desc: '【縮短控制時間】', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
-            { id: 'u2', desc: '【召喚物加強】', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
-            { id: 'u3', desc: '【恐懼擴散】', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
+            { id: 'u1', desc: '縮短控制時間', apply: (s) => s.tetherDuration = Math.max(60, s.tetherDuration - 30) },
+            { id: 'u2', desc: '召喚物加強', apply: (s) => { s.summonBonusHp += 15; s.summonBonusAtk += 2; } },
+            { id: 'u3', desc: '恐懼擴散', apply: (s) => { s.fearRadius += 10; s.fearCooldown = Math.max(30, s.fearCooldown - 5); } }
         ],
         specialUpgrade: { id: 's1', desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)', apply: (s) => s.isSpecial = true }
     }
@@ -167,10 +167,8 @@ function startGame(skillId) {
     
     level10Frames = 0; bossIsDead = false;
 
-    // 召喚法術開局自帶 2 隻獵犬
     if (skillId === 'summon') {
-        summons.push(new Summon(player.x - 30, player.y, 'hound'));
-        summons.push(new Summon(player.x + 30, player.y, 'hound'));
+        summons.push(new Summon(player.x, player.y - 30, 'hound'));
     }
     
     document.getElementById('start-screen').classList.add('hidden');
@@ -204,6 +202,54 @@ class DamageText {
     }
 }
 
+class FearRipple {
+    constructor(x, y, maxRadius) {
+        this.x = x; this.y = y;
+        this.maxRadius = maxRadius;
+        this.radius = 0;
+        this.life = 25; 
+        this.maxLife = 25;
+    }
+    update() {
+        this.radius += this.maxRadius / this.maxLife;
+        this.life--;
+        return this.life > 0;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.strokeStyle = 'rgba(216, 27, 96, 0.8)'; 
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+class TransformPoof {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.life = 15;
+        this.maxLife = 15;
+        this.radius = 5;
+    }
+    update() {
+        this.radius += 2.5;
+        this.life--;
+        return this.life > 0;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.fillStyle = '#8BC34A'; 
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
 class Enemy {
     constructor(hpMult, type = 'normal') {
         const angle = Math.random() * Math.PI * 2;
@@ -230,20 +276,18 @@ class Enemy {
         this.maxHp = this.hp; this.baseSpeed = this.speed; 
         this.frozenTimer = 0; this.frostHitCount = 0; this.slowMultiplier = 1.0;
         
-        // 召喚法術相關機制
-        this.tauntedBy = null; // 嘲諷此怪物的召喚物
-        this.fearTimer = 0;    // 恐懼狀態計時
+        this.tauntedBy = null; 
+        this.fearTimer = 0;    
         this.fearSourceX = 0;
         this.fearSourceY = 0;
     }
     update() {
-        // 1. 恐懼優先 (反向逃跑)
         if (this.fearTimer > 0) {
             this.fearTimer--;
             const dx = this.x - this.fearSourceX;
             const dy = this.y - this.fearSourceY;
             const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-            const speed = this.baseSpeed * 0.2; // 恐懼時移動速度降為 20%
+            const speed = this.baseSpeed * 0.2; 
             this.x += (dx / dist) * speed;
             this.y += (dy / dist) * speed;
             return; 
@@ -254,7 +298,6 @@ class Enemy {
             return;
         }
         
-        // 2. 判斷仇恨目標
         let targetX = player.x;
         let targetY = player.y;
         let targetHitDist = player.size + this.size;
@@ -279,15 +322,14 @@ class Enemy {
         this.x += (dx / dist) * actualSpeed;
         this.y += (dy / dist) * actualSpeed;
         
-        this.slowMultiplier = 1.0; // 每幀重置
+        this.slowMultiplier = 1.0; 
         
-        // 碰撞傷害
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
                 if (player.hp <= 0) gameOver(false);
             } else {
-                targetObj.hp -= 0.5; // 怪物對召喚物造成傷害
+                targetObj.hp -= 0.5; 
             }
         }
     }
@@ -305,9 +347,8 @@ class Enemy {
     }
 }
 
-// === 召喚物 (獵犬與青蛙) 類別 ===
 class Summon {
-    constructor(x, y, type, sourceEnemyAtk = 10, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
+    constructor(x, y, type, sourceEnemyAtk = 5, sourceEnemyMaxHp = 0, sourceEnemySpeed = 3.5) {
         this.x = x; this.y = y;
         this.type = type; 
         this.size = 15;
@@ -316,13 +357,13 @@ class Summon {
         if (type === 'hound') {
             this.maxHp = 150 + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = 10 + (s ? s.summonBonusAtk : 0);
+            this.atk = 5 + (s ? s.summonBonusAtk : 0);
             this.speed = 3.5;
             this.emoji = '🐕';
         } else if (type === 'frog') {
             this.maxHp = (sourceEnemyMaxHp * 1.5) + (s ? s.summonBonusHp : 0);
             this.hp = this.maxHp;
-            this.atk = sourceEnemyAtk + (s ? s.summonBonusAtk : 0);
+            this.atk = 5 + (s ? s.summonBonusAtk : 0); 
             this.speed = sourceEnemySpeed;
             this.emoji = '🐸';
         }
@@ -333,16 +374,15 @@ class Summon {
     }
     
     update() {
-        // 劇毒沼澤機制
         if (this.type === 'frog' && player.skillStats.isSpecial) {
             this.poisonTimer++;
-            if (this.poisonTimer >= 20) { // 每 1/3 秒 (20幀)
+            if (this.poisonTimer >= 20) { 
                 this.poisonTimer = 0;
                 for (let i = 0; i < enemies.length; i++) {
                     let e = enemies[i];
                     if (e.hp <= 0) continue;
                     const dx = e.x - this.x; const dy = e.y - this.y;
-                    if (dx*dx + dy*dy <= 80*80) { // 半徑 80
+                    if (dx*dx + dy*dy <= 80*80) { 
                         e.hp -= 2; 
                         damageTexts.push(new DamageText(e.x, e.y, 2, '#76FF03'));
                     }
@@ -350,13 +390,11 @@ class Summon {
             }
         }
 
-        // 尋找單挑目標 (1v1 嘲諷攔截)
         if (!this.target || this.target.hp <= 0) {
             this.target = null;
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 不找已經被其他召喚物嘲諷的怪
                 if (e.hp <= 0 || (e.tauntedBy && e.tauntedBy !== this)) continue;
                 const dx = e.x - this.x; const dy = e.y - this.y;
                 const dSq = dx * dx + dy * dy;
@@ -364,11 +402,10 @@ class Summon {
             }
             if (closest) {
                 this.target = closest;
-                closest.tauntedBy = this; // 強制嘲諷
+                closest.tauntedBy = this; 
             }
         }
 
-        // 移動與攻擊
         if (this.target) {
             const dx = this.target.x - this.x; const dy = this.target.y - this.y;
             const distSq = dx * dx + dy * dy; const dist = Math.sqrt(distSq) || 1;
@@ -380,11 +417,10 @@ class Summon {
                 if (this.attackCooldown <= 0) {
                     this.target.hp -= this.atk;
                     damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, '#FF9800'));
-                    this.attackCooldown = 30; // 每 0.5 秒咬一次
+                    this.attackCooldown = 30; 
                 }
             }
         } else {
-            // 沒怪時跟著玩家
             const dx = player.x - this.x; const dy = player.y - this.y;
             const distSq = dx * dx + dy * dy;
             if (distSq > 100 * 100) {
@@ -402,37 +438,36 @@ class Summon {
             ctx.fillStyle = 'rgba(118, 255, 3, 0.2)'; ctx.beginPath(); ctx.arc(this.x, this.y, 80, 0, Math.PI*2); ctx.fill();
         }
         ctx.font = `${this.size * 2}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.emoji, this.x, this.y);
-        // 血條
         ctx.fillStyle = '#F44336'; ctx.fillRect(this.x - 10, this.y - 20, 20, 3);
         ctx.fillStyle = '#4CAF50'; ctx.fillRect(this.x - 10, this.y - 20, 20 * (this.hp / this.maxHp), 3);
     }
 }
 
-// === 牽線支配特效 ===
 class TetherEffect {
     constructor(target, stats) {
         this.target = target;
         this.stats = stats;
         this.duration = 0; 
         this.maxDuration = stats.tetherDuration;
-        this.pulseTimer = 0; // 一牽線馬上恐懼
+        this.pulseTimer = 0; 
     }
     update() {
         if (!this.target || this.target.hp <= 0) {
             this.convertToFrog(); return false;
         }
         
-        this.target.slowMultiplier = 0.5; // 造成50%緩速
+        this.target.slowMultiplier = 0.5; 
         
-        // 恐懼波
         if (this.pulseTimer <= 0) {
             this.pulseTimer = this.stats.fearCooldown;
+            effects.push(new FearRipple(this.target.x, this.target.y, this.stats.fearRadius));
+
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
                 if (e === this.target || e.hp <= 0) continue;
                 const dx = e.x - this.target.x; const dy = e.y - this.target.y;
                 if (dx*dx + dy*dy <= this.stats.fearRadius * this.stats.fearRadius) {
-                    e.fearTimer = 30; // 恐懼0.5秒
+                    e.fearTimer = 30; 
                     e.fearSourceX = this.target.x; e.fearSourceY = this.target.y;
                 }
             }
@@ -450,25 +485,20 @@ class TetherEffect {
     
     convertToFrog() {
         if (!this.target) return;
-        let atk = this.target.type === 'mini' ? 15 : 10;
-        summons.push(new Summon(this.target.x, this.target.y, 'frog', atk, this.target.maxHp, this.target.baseSpeed));
+        effects.push(new TransformPoof(this.target.x, this.target.y));
+        summons.push(new Summon(this.target.x, this.target.y, 'frog', 5, this.target.maxHp, this.target.baseSpeed));
         player.skillStats.currentTetherTarget = null; 
     }
     
     draw() {
         if (!this.target) return;
         ctx.save();
-        // 虛線牽線
         ctx.beginPath(); ctx.setLineDash([5, 5]); ctx.moveTo(player.x, player.y); ctx.lineTo(this.target.x, this.target.y);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
         
-        // 注入能量外環
         ctx.beginPath(); ctx.arc(this.target.x, this.target.y, this.target.size + 10, -Math.PI/2, -Math.PI/2 + (this.duration / this.maxDuration) * Math.PI * 2);
         ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 3; ctx.setLineDash([]); ctx.stroke();
         
-        // 恐懼範圍示意
-        ctx.beginPath(); ctx.arc(this.target.x, this.target.y, this.stats.fearRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.1)'; ctx.fill();
         ctx.restore();
     }
 }
@@ -502,7 +532,6 @@ class HealDrop {
 }
 
 class Projectile {
-    // ... 原本的魔法飛彈邏輯維持不變 ...
     constructor(x, y, target, stats, isSplit = false) {
         this.x = x; this.y = y; this.target = target; this.stats = stats;
         this.speed = stats.speed; this.isSpecial = stats.isSpecial;
@@ -520,7 +549,9 @@ class Projectile {
             let closest = null; let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                if (e.hp <= 0 || this.hitEnemies.has(e) || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
+                // 【核心修改】飛彈重新索敵加入嚴格邊界判定
+                const m = e.size + 10;
+                if (e.hp <= 0 || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
                 const dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y); 
                 if (dSq < minDistSq) { minDistSq = dSq; closest = e; }
             }
@@ -567,7 +598,6 @@ class Projectile {
 }
 
 class FrostEffect {
-    // ... 原本冰環邏輯 ...
     constructor(x, y, stats) {
         this.x = x; this.y = y; this.maxRadius = stats.radius; this.radius = 0;
         this.duration = stats.duration; this.maxDuration = stats.duration; 
@@ -609,11 +639,10 @@ class FrostEffect {
 function fireSkill() {
     const s = player.skillStats;
     if (player.skill === 'summon') {
-        // 1. 自動補充獵犬
         let houndCount = summons.filter(sum => sum.type === 'hound').length;
         if (houndCount < 3) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= 480) { // 8秒冷卻
+            if (s.houndSpawnTimer >= 480) { 
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
@@ -621,14 +650,14 @@ function fireSkill() {
             s.houndSpawnTimer = 0;
         }
         
-        // 2. 牽線邏輯
         if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0) {
             let bestTarget = null; let maxHpFound = -1;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                if (e.type === 'boss' || e.hp <= 0) continue; // 排除大魔王
-                // 必須在畫面內
-                if (e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
+                // 【核心修改】牽線索敵加入嚴格邊界判定
+                const m = e.size + 10;
+                if (e.type === 'boss' || e.hp <= 0) continue; 
+                if (e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
                 
                 if (e.maxHp > maxHpFound) {
                     maxHpFound = e.maxHp; bestTarget = e;
@@ -648,7 +677,9 @@ function fireSkill() {
         let initialTarget = null; let minDistSq = Infinity;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
-            if (e.hp <= 0 || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
+            // 【核心修改】飛彈初次發射索敵加入嚴格邊界判定
+            const m = e.size + 10;
+            if (e.hp <= 0 || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
             const dSq = (e.x - player.x)*(e.x - player.x) + (e.y - player.y)*(e.y - player.y); 
             if (dSq < minDistSq) { minDistSq = dSq; initialTarget = e; }
         }
@@ -801,19 +832,16 @@ function gameLoop() {
     for (let i = effects.length - 1; i >= 0; i--) if (!effects[i].update()) effects.splice(i, 1);
     for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
     
-    // 更新召喚物與牽線
     for (let i = summons.length - 1; i >= 0; i--) {
         if (!summons[i].update()) {
-            // 如果召喚物死亡，解除怪物對它的嘲諷
             for(let e of enemies) if (e.tauntedBy === summons[i]) e.tauntedBy = null;
             summons.splice(i, 1);
         }
     }
     for (let i = tethers.length - 1; i >= 0; i--) if (!tethers[i].update()) tethers.splice(i, 1);
 
-    // 繪製
     gems.forEach(g => g.draw()); healDrops.forEach(h => h.draw()); projectiles.forEach(p => p.draw()); effects.forEach(e => e.draw());
-    tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); // 繪製牽線與召喚物
+    tethers.forEach(t => t.draw()); summons.forEach(s => s.draw()); 
 
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update(); enemies[i].draw();
