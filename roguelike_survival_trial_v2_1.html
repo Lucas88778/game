@@ -3,42 +3,141 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v5.10 (召喚平衡版)</title>
+<title>Roguelike 生存：極限試煉 v6.0 (召喚七階平衡版)</title>
 <style>
-    body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
-    canvas { display: block; }
-    #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-    .panel {
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.88); padding: 30px; border-radius: 10px;
-        border: 2px solid #555; text-align: center; pointer-events: auto;
-        width: 88%; max-width: 500px; box-sizing: border-box;
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #222;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: white;
+        touch-action: none;
     }
+    canvas { display: block; }
+
+    #ui-layer {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+    }
+
+    .panel {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.88);
+        padding: 30px;
+        border-radius: 10px;
+        border: 2px solid #555;
+        text-align: center;
+        pointer-events: auto;
+        width: 88%;
+        max-width: 520px;
+        box-sizing: border-box;
+    }
+
     .btn {
-        display: inline-block; background: #4CAF50; color: white; padding: 10px 20px;
-        margin: 10px; border: none; border-radius: 5px; cursor: pointer;
-        font-size: 16px; transition: background 0.3s; box-sizing: border-box;
+        display: inline-block;
+        background: #4CAF50;
+        color: white;
+        padding: 10px 20px;
+        margin: 10px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+        box-sizing: border-box;
     }
     .btn:hover { background: #45a049; }
+
     .btn-start {
-        width: 100px; height: 100px; margin: 10px 5px; padding: 10px 5px;
-        display: inline-flex; flex-direction: column; justify-content: center; align-items: center;
+        width: 100px;
+        height: 100px;
+        margin: 10px 5px;
+        padding: 10px 5px;
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
         vertical-align: top;
     }
-    .btn-start .emoji { font-size: 28px; margin-bottom: 8px; }
-    .btn-upgrade { background: #2196F3; width: 100%; margin: 10px 0; display: block; white-space: pre-line; }
+    .btn-start .emoji {
+        font-size: 28px;
+        margin-bottom: 8px;
+    }
+
+    .btn-upgrade {
+        background: #2196F3;
+        width: 100%;
+        margin: 10px 0;
+        display: block;
+        white-space: pre-line;
+        line-height: 1.35;
+    }
     .btn-upgrade:hover { background: #1976D2; }
-    .btn-special { background: #ff9800; font-weight: bold; text-shadow: 1px 1px 2px black; }
+
+    .btn-special {
+        background: #ff9800;
+        font-weight: bold;
+        text-shadow: 1px 1px 2px black;
+    }
     .btn-special:hover { background: #e68a00; }
+
     #exp-bar-container {
-        position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-        width: 80%; height: 20px; background: #333; border-radius: 10px; border: 2px solid #777;
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80%;
+        height: 20px;
+        background: #333;
+        border-radius: 10px;
+        border: 2px solid #777;
     }
-    #exp-bar { height: 100%; width: 0%; background: #4CAF50; border-radius: 8px; transition: width 0.2s; }
+
+    #exp-bar {
+        height: 100%;
+        width: 0%;
+        background: #4CAF50;
+        border-radius: 8px;
+        transition: width 0.2s;
+    }
+
     #status {
-        position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
-        font-size: 18px; text-shadow: 1px 1px 2px black; text-align: center;
+        position: absolute;
+        top: 38px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 18px;
+        text-shadow: 1px 1px 2px black;
+        text-align: center;
+        white-space: pre-line;
     }
+
+    #summon-count-row {
+        position: absolute;
+        top: 66px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 16px;
+        text-shadow: 1px 1px 2px black;
+    }
+
+    .summon-count {
+        background: rgba(0, 0, 0, 0.35);
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.18);
+        min-width: 92px;
+        text-align: center;
+    }
+
     .hidden { display: none !important; }
 </style>
 </head>
@@ -51,6 +150,11 @@
         <div id="exp-bar"></div>
     </div>
     <div id="status" class="hidden">進化等級: 0 / 10</div>
+
+    <div id="summon-count-row" class="hidden">
+        <div id="hound-count" class="summon-count">🐕 0/0</div>
+        <div id="frog-count" class="summon-count">🐸 0/0</div>
+    </div>
 
     <div id="start-screen" class="panel">
         <h2>Roguelike 生存試煉</h2>
@@ -126,115 +230,34 @@ const joystick = {
 
 const summonTierTables = {
     a: [
-        { spawnInterval: 260, maxHounds: 4 },
-        { spawnInterval: 234, maxHounds: 4 },
-        { spawnInterval: 208, maxHounds: 4 },
-        { spawnInterval: 182, maxHounds: 5 },
-        { spawnInterval: 156, maxHounds: 5 },
-        { spawnInterval: 130, maxHounds: 6 },
-        { spawnInterval: 108, maxHounds: 7 } // Lv10 突破
+        { spawnInterval: 250, maxHounds: 4 },
+        { spawnInterval: 235, maxHounds: 4 },
+        { spawnInterval: 220, maxHounds: 4 },
+        { spawnInterval: 205, maxHounds: 5 },
+        { spawnInterval: 190, maxHounds: 5 },
+        { spawnInterval: 175, maxHounds: 5 },
+        { spawnInterval: 160, maxHounds: 6 },
+        { spawnInterval: 145, maxHounds: 6 }
     ],
     b: [
-        { hp: 105, atk: 5, attackInterval: 30, speed: 3.45 },
-        { hp: 123, atk: 6, attackInterval: 30, speed: 3.48 },
-        { hp: 141, atk: 6, attackInterval: 29, speed: 3.50 },
-        { hp: 159, atk: 7, attackInterval: 29, speed: 3.53 },
-        { hp: 177, atk: 8, attackInterval: 28, speed: 3.56 },
-        { hp: 195, atk: 9, attackInterval: 27, speed: 3.60 },
-        { hp: 215, atk: 10, attackInterval: 26, speed: 3.64 } // Lv10 突破
+        { hp: 110, atk: 5, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
+        { hp: 122, atk: 6, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
+        { hp: 134, atk: 6, attackInterval: 29, speed: 3.45, damageReduction: 0.00 },
+        { hp: 146, atk: 7, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
+        { hp: 158, atk: 7, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
+        { hp: 170, atk: 8, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
+        { hp: 182, atk: 8, attackInterval: 27, speed: 3.45, damageReduction: 0.20 },
+        { hp: 194, atk: 9, attackInterval: 27, speed: 3.45, damageReduction: 0.20 }
     ],
     c: [
-        {
-            convertTime: 420,
-            tetherSlow: 0.15,
-            frogHp: 185,
-            frogAtk: 9,
-            frogAttackInterval: 29,
-            frogSpeed: 3.35,
-            maxFrogs: 4,
-            poisonRadius: 58,
-            poisonInterval: 24,
-            poisonDamage: 2,
-            poisonBossDamage: 1
-        },
-        {
-            convertTime: 392,
-            tetherSlow: 0.17,
-            frogHp: 205,
-            frogAtk: 10,
-            frogAttackInterval: 28,
-            frogSpeed: 3.37,
-            maxFrogs: 4,
-            poisonRadius: 63,
-            poisonInterval: 24,
-            poisonDamage: 2,
-            poisonBossDamage: 1
-        },
-        {
-            convertTime: 364,
-            tetherSlow: 0.19,
-            frogHp: 225,
-            frogAtk: 11,
-            frogAttackInterval: 27,
-            frogSpeed: 3.39,
-            maxFrogs: 4,
-            poisonRadius: 68,
-            poisonInterval: 23,
-            poisonDamage: 2,
-            poisonBossDamage: 1
-        },
-        {
-            convertTime: 338,
-            tetherSlow: 0.21,
-            frogHp: 245,
-            frogAtk: 12,
-            frogAttackInterval: 26,
-            frogSpeed: 3.41,
-            maxFrogs: 4,
-            poisonRadius: 73,
-            poisonInterval: 23,
-            poisonDamage: 3,
-            poisonBossDamage: 2
-        },
-        {
-            convertTime: 316,
-            tetherSlow: 0.23,
-            frogHp: 265,
-            frogAtk: 13,
-            frogAttackInterval: 25,
-            frogSpeed: 3.43,
-            maxFrogs: 5,
-            poisonRadius: 78,
-            poisonInterval: 22,
-            poisonDamage: 3,
-            poisonBossDamage: 2
-        },
-        {
-            convertTime: 300,
-            tetherSlow: 0.25,
-            frogHp: 285,
-            frogAtk: 14,
-            frogAttackInterval: 24,
-            frogSpeed: 3.45,
-            maxFrogs: 5,
-            poisonRadius: 83,
-            poisonInterval: 21,
-            poisonDamage: 4,
-            poisonBossDamage: 3
-        },
-        {
-            convertTime: 284,
-            tetherSlow: 0.28,
-            frogHp: 305,
-            frogAtk: 15,
-            frogAttackInterval: 23,
-            frogSpeed: 3.48,
-            maxFrogs: 6,
-            poisonRadius: 88,
-            poisonInterval: 20,
-            poisonDamage: 5,
-            poisonBossDamage: 4
-        } // Lv10 突破
+        { convertTime: 420, frogHp: 190, frogAtk: 9,  frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 58, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
+        { convertTime: 400, frogHp: 208, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 61, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
+        { convertTime: 380, frogHp: 226, frogAtk: 10, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 64, poisonInterval: 23, poisonDamage: 2, poisonBossDamage: 1 },
+        { convertTime: 360, frogHp: 244, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 67, poisonInterval: 23, poisonDamage: 3, poisonBossDamage: 2 },
+        { convertTime: 340, frogHp: 262, frogAtk: 11, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 2 },
+        { convertTime: 320, frogHp: 280, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 73, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 3 },
+        { convertTime: 300, frogHp: 298, frogAtk: 12, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 76, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 3 },
+        { convertTime: 280, frogHp: 316, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 79, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 4 }
     ]
 };
 
@@ -288,6 +311,8 @@ const skillDefinitions = {
         isSpecial: false,
         currentTetherTarget: null,
         houndSpawnTimer: 0,
+        tetherSlow: 0.15,
+        summonDamageReduction: 0,
         pathTiers: { a: 0, b: 0, c: 0 },
         pathNames: {
             a: '🐕召喚加速',
@@ -297,7 +322,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤 (青蛙散發毒霧)',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -25%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -308,9 +333,9 @@ const skillDefinitions = {
 };
 
 function recalcSummonStats(s) {
-    const aTier = Math.min(s.pathTiers.a, 6);
-    const bTier = Math.min(s.pathTiers.b, 6);
-    const cTier = Math.min(s.pathTiers.c, 6);
+    const aTier = Math.min(s.pathTiers.a, 7);
+    const bTier = Math.min(s.pathTiers.b, 7);
+    const cTier = Math.min(s.pathTiers.c, 7);
 
     const a = summonTierTables.a[aTier];
     const b = summonTierTables.b[bTier];
@@ -323,9 +348,10 @@ function recalcSummonStats(s) {
     s.houndAtk = b.atk;
     s.houndAttackInterval = b.attackInterval;
     s.houndSpeed = b.speed;
+    s.houndDamageReduction = b.damageReduction;
 
     s.tetherDuration = c.convertTime;
-    s.tetherSlow = c.tetherSlow;
+    s.tetherSlow = 0.15;
 
     s.frogHp = c.frogHp;
     s.frogAtk = c.frogAtk;
@@ -337,29 +363,28 @@ function recalcSummonStats(s) {
     s.poisonInterval = c.poisonInterval;
     s.poisonDamage = c.poisonDamage;
     s.poisonBossDamage = c.poisonBossDamage;
+
+    s.summonDamageReduction = s.isSpecial ? 0.25 : 0;
 }
 
 function refreshExistingSummons() {
     if (player.skill !== 'summon') return;
-    summons.forEach(s => s.refreshStats());
+    summons.forEach(sum => sum.refreshStats());
 }
 
-function applySummonUpgrade(pathKey, allowBreakthrough = false) {
+function applySummonUpgrade(pathKey) {
     const s = player.skillStats;
-    const maxTier = allowBreakthrough ? 6 : 5;
-    if (s.pathTiers[pathKey] >= maxTier) return false;
+    if (s.pathTiers[pathKey] >= 7) return false;
     s.pathTiers[pathKey] += 1;
     recalcSummonStats(s);
     refreshExistingSummons();
     return true;
 }
 
-function getSummonUpgradeLabel(pathKey, allowBreakthrough = false) {
+function getSummonUpgradeLabel(pathKey) {
     const s = player.skillStats;
     const currentTier = s.pathTiers[pathKey];
-    const maxTier = allowBreakthrough ? 6 : 5;
-    if (currentTier >= maxTier) return null;
-
+    if (currentTier >= 7) return null;
     const nextTier = currentTier + 1;
     const pathName = s.pathNames[pathKey];
 
@@ -367,29 +392,53 @@ function getSummonUpgradeLabel(pathKey, allowBreakthrough = false) {
         const cur = summonTierTables.a[currentTier];
         const next = summonTierTables.a[nextTier];
         let extra = '';
-        if (next.maxHounds !== cur.maxHounds) extra = `\n獵犬上限 ${cur.maxHounds} → ${next.maxHounds}`;
+        if (next.maxHounds !== cur.maxHounds) {
+            extra = `\n獵犬上限 ${cur.maxHounds} → ${next.maxHounds}`;
+        }
         return `${pathName} [${currentTier}→${nextTier}]\n召喚間隔 ${cur.spawnInterval}f → ${next.spawnInterval}f${extra}`;
     }
 
     if (pathKey === 'b') {
         const cur = summonTierTables.b[currentTier];
         const next = summonTierTables.b[nextTier];
-        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f`;
+        let extra = '';
+        if (next.damageReduction !== cur.damageReduction) {
+            extra = `\n獵犬承受接觸傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
+        }
+        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}`;
     }
 
     if (pathKey === 'c') {
         const cur = summonTierTables.c[currentTier];
         const next = summonTierTables.c[nextTier];
+        let frogCapText = '';
+        if (next.maxFrogs !== cur.maxFrogs) {
+            frogCapText = `\n青蛙上限 ${cur.maxFrogs} → ${next.maxFrogs}`;
+        }
         let poisonText = '';
         if (player.skillStats.isSpecial) {
             poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
         }
-        let frogCapText = '';
-        if (next.maxFrogs !== cur.maxFrogs) frogCapText = `\n青蛙上限 ${cur.maxFrogs} → ${next.maxFrogs}`;
-        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f → ${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}`;
+        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}`;
     }
 
     return pathName;
+}
+
+function updateSummonCountUI() {
+    const row = document.getElementById('summon-count-row');
+    if (player.skill !== 'summon' || gameState === 'start') {
+        row.classList.add('hidden');
+        return;
+    }
+
+    row.classList.remove('hidden');
+
+    const houndCount = summons.filter(s => s.type === 'hound' && !s.isSpawning).length;
+    const frogCount = summons.filter(s => s.type === 'frog' && !s.isSpawning).length;
+
+    document.getElementById('hound-count').innerText = `🐕 ${houndCount}/${player.skillStats.maxHounds}`;
+    document.getElementById('frog-count').innerText = `🐸 ${frogCount}/${player.skillStats.maxFrogs}`;
 }
 
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
@@ -455,7 +504,10 @@ function startGame(skillId) {
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
+
     updateUI();
+    updateSummonCountUI();
+
     gameState = 'playing';
     requestAnimationFrame(gameLoop);
 }
@@ -550,7 +602,6 @@ class Enemy {
         this.frozenTimer = 0;
         this.frostHitCount = 0;
         this.slowMultiplier = 1.0;
-
         this.tauntedBy = null;
 
         this.isFading = false;
@@ -607,13 +658,16 @@ class Enemy {
                 player.hp -= 0.5;
                 if (player.hp <= 0) gameOver(false);
             } else {
-                targetObj.hp -= 0.5;
+                const reduction = targetObj.damageReduction || 0;
+                const actualDamage = 0.5 * (1 - reduction);
+                targetObj.hp -= actualDamage;
             }
         }
     }
 
     draw() {
         ctx.save();
+
         if (this.isFading) {
             ctx.globalAlpha = Math.max(0, 1 - (this.fadeTimer / this.fadeDuration));
         }
@@ -635,6 +689,7 @@ class Enemy {
             let mark = this.frostHitCount === 1 ? '❄️' : '❄️❄️';
             ctx.fillText(mark, this.x, this.y - this.size - 8);
         }
+
         ctx.restore();
     }
 }
@@ -662,18 +717,21 @@ class Summon {
 
     refreshStats(resetHp = false) {
         const s = player.skillStats;
-        let newMaxHp, newAtk, newSpeed, newAttackInterval;
+
+        let newMaxHp, newAtk, newSpeed, newAttackInterval, newReduction;
 
         if (this.type === 'hound') {
             newMaxHp = s.houndHp;
             newAtk = s.houndAtk;
             newSpeed = s.houndSpeed;
             newAttackInterval = s.houndAttackInterval;
+            newReduction = Math.min(0.8, s.summonDamageReduction + s.houndDamageReduction);
         } else {
             newMaxHp = s.frogHp;
             newAtk = s.frogAtk;
             newSpeed = s.frogSpeed;
             newAttackInterval = s.frogAttackInterval;
+            newReduction = Math.min(0.8, s.summonDamageReduction);
         }
 
         const hpRatio = (this.maxHp && this.maxHp > 0) ? this.hp / this.maxHp : 1;
@@ -682,6 +740,7 @@ class Summon {
         this.atk = newAtk;
         this.speed = newSpeed;
         this.attackInterval = newAttackInterval;
+        this.damageReduction = newReduction;
 
         if (resetHp) {
             this.hp = this.maxHp;
@@ -714,9 +773,14 @@ class Summon {
                     const dx = e.x - this.x;
                     const dy = e.y - this.y;
                     if (dx * dx + dy * dy <= player.skillStats.poisonRadius * player.skillStats.poisonRadius) {
-                        const damage = (e.type === 'boss') ? player.skillStats.poisonBossDamage : player.skillStats.poisonDamage;
+                        const damage = (e.type === 'boss')
+                            ? player.skillStats.poisonBossDamage
+                            : player.skillStats.poisonDamage;
                         e.hp -= damage;
-                        damageTexts.push(new DamageText(e.x, e.y, damage, e.type === 'boss' ? '#A5D6A7' : '#76FF03'));
+                        damageTexts.push(new DamageText(
+                            e.x, e.y, damage,
+                            e.type === 'boss' ? '#A5D6A7' : '#76FF03'
+                        ));
                     }
                 }
             }
@@ -818,7 +882,12 @@ class Summon {
 
                 if (actualDx * actualDx + actualDy * actualDy < (hitDist * 2.2) * (hitDist * 2.2)) {
                     this.target.hp -= this.atk;
-                    damageTexts.push(new DamageText(this.target.x, this.target.y, this.atk, this.type === 'hound' ? '#FF9800' : '#8BC34A'));
+                    damageTexts.push(new DamageText(
+                        this.target.x,
+                        this.target.y,
+                        this.atk,
+                        this.type === 'hound' ? '#FF9800' : '#8BC34A'
+                    ));
                     this.attackCooldown = this.attackInterval;
                 }
             }
@@ -1080,7 +1149,10 @@ class Projectile {
                 e.hp -= actualDamage;
                 this.hitEnemies.add(e);
 
-                let textColor = this.isSplit ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc') : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
+                let textColor = this.isSplit
+                    ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc')
+                    : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
+
                 damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
@@ -1114,6 +1186,7 @@ class Projectile {
             ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
             ctx.fill();
         }
+
         ctx.font = this.isSplit ? '16px Arial' : '24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1175,6 +1248,7 @@ class FrostEffect {
                 }
             }
         }
+
         return this.duration > 0;
     }
 
@@ -1232,6 +1306,7 @@ function fireSkill() {
                 tethers.push(new TetherEffect(bestTarget, s));
             }
         }
+
         return;
     }
 
@@ -1243,6 +1318,7 @@ function fireSkill() {
     if (player.skill === 'missile') {
         let initialTarget = null;
         let minDistSq = Infinity;
+
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             const m = e.size + 10;
@@ -1253,6 +1329,7 @@ function fireSkill() {
                 initialTarget = e;
             }
         }
+
         for (let i = 0; i < s.count; i++) {
             projectiles.push(new Projectile(
                 player.x + (Math.random() - 0.5) * 50,
@@ -1262,6 +1339,7 @@ function fireSkill() {
                 false
             ));
         }
+
         s.currentCooldown = s.cooldown;
     } else if (player.skill === 'frost') {
         effects.push(new FrostEffect(player.x, player.y, s));
@@ -1272,6 +1350,7 @@ function fireSkill() {
 function updateUI() {
     document.getElementById('exp-bar').style.width = `${(player.exp / player.nextExp) * 100}%`;
     document.getElementById('status').innerText = `進化等級: ${player.level} / 10`;
+    updateSummonCountUI();
 }
 
 function levelUp() {
@@ -1306,16 +1385,21 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(三項皆可選，並可突破原有限制)";
-            const pathKeys = ['a', 'b', 'c'];
-            let clickedCount = 0;
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n(目前仍未滿階的三方向可全部取得)";
+            const pathKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 7);
 
+            if (pathKeys.length === 0) {
+                resumeGameAfterUpgrade();
+                return;
+            }
+
+            let clickedCount = 0;
             pathKeys.forEach(key => {
                 let btn = document.createElement('button');
                 btn.className = 'btn btn-upgrade btn-special';
-                btn.innerText = getSummonUpgradeLabel(key, true);
+                btn.innerText = getSummonUpgradeLabel(key);
                 btn.onclick = () => {
-                    applySummonUpgrade(key, true);
+                    applySummonUpgrade(key);
                     btn.classList.add('hidden');
                     clickedCount++;
                     if (clickedCount === pathKeys.length) resumeGameAfterUpgrade();
@@ -1326,20 +1410,21 @@ function levelUp() {
         } else {
             document.getElementById('upgrade-title').innerText = "技能強化！";
 
-            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 5);
+            const availableKeys = ['a', 'b', 'c'].filter(key => s.pathTiers[key] < 7);
             availableKeys.sort(() => 0.5 - Math.random());
             const selected = availableKeys.slice(0, Math.min(2, availableKeys.length));
 
             selected.forEach(key => {
                 let btn = document.createElement('button');
                 btn.className = 'btn btn-upgrade';
-                btn.innerText = getSummonUpgradeLabel(key, false);
+                btn.innerText = getSummonUpgradeLabel(key);
                 btn.onclick = () => {
-                    applySummonUpgrade(key, false);
+                    applySummonUpgrade(key);
                     resumeGameAfterUpgrade();
                 };
                 optionsDiv.appendChild(btn);
             });
+
             return;
         }
     }
@@ -1390,6 +1475,8 @@ function resumeGameAfterUpgrade() {
         document.getElementById('status').style.color = "#FFEB3B";
         enemies.push(new Enemy(1 + player.level * 0.3, 'boss'));
     }
+
+    updateSummonCountUI();
 }
 
 function gameOver(isWin) {
@@ -1435,6 +1522,7 @@ function drawConfetti() {
 
 function drawJoystick() {
     if (!joystick.active) return;
+
     ctx.save();
     ctx.globalAlpha = 0.5;
     ctx.beginPath();
@@ -1473,17 +1561,20 @@ function gameLoop() {
             tethers.forEach(t => t.draw());
             summons.forEach(s => s.draw());
             damageTexts.forEach(dt => dt.draw());
+
             ctx.font = '30px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('🧙', player.x, player.y);
             drawConfetti();
         }
+        updateSummonCountUI();
         requestAnimationFrame(gameLoop);
         return;
     }
 
     if (gameState !== 'playing') {
+        updateSummonCountUI();
         if (gameState === 'paused' || gameState === 'start') requestAnimationFrame(gameLoop);
         return;
     }
@@ -1492,6 +1583,7 @@ function gameLoop() {
 
     let moveX = 0;
     let moveY = 0;
+
     if (keys['a'] || keys['arrowleft']) moveX -= 1;
     if (keys['d'] || keys['arrowright']) moveX += 1;
     if (keys['w'] || keys['arrowup']) moveY -= 1;
@@ -1524,6 +1616,7 @@ function gameLoop() {
         level10Frames += bossIsDead ? 2 : 1;
         stopSpawning = level10Frames >= 2400;
         let spawnRate = bossIsDead ? 8 : 16;
+
         if (!stopSpawning) {
             if (frameCount % spawnRate === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'normal'));
             if (frameCount % (spawnRate * 4) === 0) enemies.push(new Enemy(1 + player.level * 0.3, 'mini'));
@@ -1601,6 +1694,7 @@ function gameLoop() {
     ctx.fillRect(player.x - 15, player.y - 25, 30 * (player.hp / player.maxHp), 5);
 
     drawJoystick();
+    updateSummonCountUI();
 
     if (player.level >= 10 && stopSpawning && enemies.length === 0) gameOver(true);
 
