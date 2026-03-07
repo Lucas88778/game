@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.1 (完美控場與華麗變身版)</title>
+<title>Roguelike 生存：極限試煉 v6.2 (絕對單挑隔離版)</title>
 <style>
     body { margin: 0; overflow: hidden; background-color: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
     canvas { display: block; }
@@ -236,7 +236,6 @@ class FearRipple {
     }
 }
 
-// 【新增】變身魔法環擴散特效
 class TransformRing {
     constructor(x, y) {
         this.x = x; this.y = y;
@@ -261,7 +260,6 @@ class TransformRing {
     }
 }
 
-// 【新增】變身魔力粒子爆發特效
 class TransformParticle {
     constructor(x, y) {
         this.x = x; this.y = y;
@@ -368,7 +366,6 @@ class Enemy {
         const distSq = dx * dx + dy * dy; 
         const dist = Math.sqrt(distSq) || 1;
         
-        // 【機制更新】將恐懼的移動邏輯整合，並確保「無傷害期」
         if (this.fearTimer > 0) {
             this.fearTimer--;
             const fdx = this.x - this.fearSourceX;
@@ -389,13 +386,13 @@ class Enemy {
             this.slowMultiplier = 1.0; 
         }
         
-        // 【機制更新】恐懼或冰凍期間，無法造成任何接觸傷害
+        // 【絕對隔離更新】嚴格限定只有對其專屬的 targetObj 才能造成傷害，避免路過波及
         if (this.fearTimer <= 0 && this.frozenTimer <= 0) {
             if (distSq < targetHitDist * targetHitDist) {
                 if (targetObj === player) {
                     player.hp -= 0.5;
                     if (player.hp <= 0) gameOver(false);
-                } else {
+                } else if (targetObj === this.tauntedBy) { // 嚴格檢查：只攻擊 1v1 對象
                     targetObj.hp -= 0.5; 
                 }
             }
@@ -416,7 +413,6 @@ class Enemy {
 }
 
 class Summon {
-    // 【更新】獵犬生命 200，青蛙生命 2 倍。
     constructor(x, y, type, sourceEnemyMaxHp = 0) {
         this.x = x; this.y = y;
         this.type = type; 
@@ -588,7 +584,6 @@ class TetherEffect {
     convertToFrog() {
         if (!this.target) return;
         
-        // 【視覺強化】華麗的多重變身特效
         for(let i = 0; i < 8; i++) {
             effects.push(new TransformParticle(this.target.x, this.target.y));
         }
