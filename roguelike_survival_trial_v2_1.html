@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v6.0 (召喚七階平衡版)</title>
+<title>Roguelike 生存：極限試煉 v6.1 (召喚七階平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -33,7 +33,7 @@
         text-align: center;
         pointer-events: auto;
         width: 88%;
-        max-width: 520px;
+        max-width: 540px;
         box-sizing: border-box;
     }
 
@@ -231,33 +231,33 @@ const joystick = {
 const summonTierTables = {
     a: [
         { spawnInterval: 250, maxHounds: 4 },
-        { spawnInterval: 235, maxHounds: 4 },
-        { spawnInterval: 220, maxHounds: 4 },
-        { spawnInterval: 205, maxHounds: 5 },
-        { spawnInterval: 190, maxHounds: 5 },
-        { spawnInterval: 175, maxHounds: 5 },
+        { spawnInterval: 232, maxHounds: 4 },
+        { spawnInterval: 214, maxHounds: 5 },
+        { spawnInterval: 196, maxHounds: 5 },
+        { spawnInterval: 178, maxHounds: 5 },
         { spawnInterval: 160, maxHounds: 6 },
-        { spawnInterval: 145, maxHounds: 6 }
+        { spawnInterval: 142, maxHounds: 6 },
+        { spawnInterval: 124, maxHounds: 6 }
     ],
     b: [
         { hp: 110, atk: 5, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
-        { hp: 122, atk: 6, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
-        { hp: 134, atk: 6, attackInterval: 29, speed: 3.45, damageReduction: 0.00 },
-        { hp: 146, atk: 7, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
-        { hp: 158, atk: 7, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
-        { hp: 170, atk: 8, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
-        { hp: 182, atk: 8, attackInterval: 27, speed: 3.45, damageReduction: 0.20 },
-        { hp: 194, atk: 9, attackInterval: 27, speed: 3.45, damageReduction: 0.20 }
+        { hp: 124, atk: 6, attackInterval: 30, speed: 3.45, damageReduction: 0.00 },
+        { hp: 138, atk: 6, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
+        { hp: 152, atk: 7, attackInterval: 29, speed: 3.45, damageReduction: 0.10 },
+        { hp: 166, atk: 7, attackInterval: 28, speed: 3.45, damageReduction: 0.10 },
+        { hp: 180, atk: 8, attackInterval: 28, speed: 3.45, damageReduction: 0.20 },
+        { hp: 194, atk: 8, attackInterval: 27, speed: 3.45, damageReduction: 0.20 },
+        { hp: 208, atk: 9, attackInterval: 27, speed: 3.45, damageReduction: 0.20 }
     ],
     c: [
         { convertTime: 420, frogHp: 190, frogAtk: 9,  frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 58, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 400, frogHp: 208, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 61, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 380, frogHp: 226, frogAtk: 10, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 64, poisonInterval: 23, poisonDamage: 2, poisonBossDamage: 1 },
-        { convertTime: 360, frogHp: 244, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 67, poisonInterval: 23, poisonDamage: 3, poisonBossDamage: 2 },
-        { convertTime: 340, frogHp: 262, frogAtk: 11, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 70, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 2 },
-        { convertTime: 320, frogHp: 280, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 73, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 3 },
-        { convertTime: 300, frogHp: 298, frogAtk: 12, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 76, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 3 },
-        { convertTime: 280, frogHp: 316, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 79, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 4 }
+        { convertTime: 396, frogHp: 212, frogAtk: 10, frogAttackInterval: 29, frogSpeed: 3.35, maxFrogs: 4, poisonRadius: 62, poisonInterval: 24, poisonDamage: 2, poisonBossDamage: 1 },
+        { convertTime: 372, frogHp: 234, frogAtk: 10, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 66, poisonInterval: 23, poisonDamage: 2, poisonBossDamage: 1 },
+        { convertTime: 348, frogHp: 256, frogAtk: 11, frogAttackInterval: 28, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 70, poisonInterval: 23, poisonDamage: 3, poisonBossDamage: 2 },
+        { convertTime: 324, frogHp: 278, frogAtk: 11, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 5, poisonRadius: 74, poisonInterval: 22, poisonDamage: 3, poisonBossDamage: 2 },
+        { convertTime: 300, frogHp: 300, frogAtk: 12, frogAttackInterval: 27, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 78, poisonInterval: 22, poisonDamage: 4, poisonBossDamage: 3 },
+        { convertTime: 276, frogHp: 322, frogAtk: 12, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 82, poisonInterval: 21, poisonDamage: 4, poisonBossDamage: 3 },
+        { convertTime: 252, frogHp: 344, frogAtk: 13, frogAttackInterval: 26, frogSpeed: 3.35, maxFrogs: 6, poisonRadius: 86, poisonInterval: 21, poisonDamage: 5, poisonBossDamage: 4 }
     ]
 };
 
@@ -322,7 +322,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -25%',
+            desc: '超級強化：劇毒沼澤＋召喚韌化\n青蛙散發毒霧，且所有召喚物承受接觸傷害 -35%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -364,7 +364,15 @@ function recalcSummonStats(s) {
     s.poisonDamage = c.poisonDamage;
     s.poisonBossDamage = c.poisonBossDamage;
 
-    s.summonDamageReduction = s.isSpecial ? 0.25 : 0;
+    s.summonDamageReduction = s.isSpecial ? 0.35 : 0;
+}
+
+function healExistingSummonsByRatio(ratio) {
+    summons.forEach(sum => {
+        if (sum.hp > 0) {
+            sum.hp = Math.min(sum.maxHp, sum.hp + sum.maxHp * ratio);
+        }
+    });
 }
 
 function refreshExistingSummons() {
@@ -378,6 +386,7 @@ function applySummonUpgrade(pathKey) {
     s.pathTiers[pathKey] += 1;
     recalcSummonStats(s);
     refreshExistingSummons();
+    healExistingSummonsByRatio(0.25);
     return true;
 }
 
@@ -395,7 +404,7 @@ function getSummonUpgradeLabel(pathKey) {
         if (next.maxHounds !== cur.maxHounds) {
             extra = `\n獵犬上限 ${cur.maxHounds} → ${next.maxHounds}`;
         }
-        return `${pathName} [${currentTier}→${nextTier}]\n召喚間隔 ${cur.spawnInterval}f → ${next.spawnInterval}f${extra}`;
+        return `${pathName} [${currentTier}→${nextTier}]\n召喚間隔 ${cur.spawnInterval}f → ${next.spawnInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
     }
 
     if (pathKey === 'b') {
@@ -405,7 +414,7 @@ function getSummonUpgradeLabel(pathKey) {
         if (next.damageReduction !== cur.damageReduction) {
             extra = `\n獵犬承受接觸傷害減免 ${(cur.damageReduction * 100).toFixed(0)}% → ${(next.damageReduction * 100).toFixed(0)}%`;
         }
-        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}`;
+        return `${pathName} [${currentTier}→${nextTier}]\nHP ${cur.hp}→${next.hp} / ATK ${cur.atk}→${next.atk} / 攻速 ${cur.attackInterval}f→${next.attackInterval}f${extra}\n現存召喚物回復 25% 最大生命`;
     }
 
     if (pathKey === 'c') {
@@ -419,7 +428,7 @@ function getSummonUpgradeLabel(pathKey) {
         if (player.skillStats.isSpecial) {
             poisonText = `\n毒霧 半徑 ${cur.poisonRadius}→${next.poisonRadius} / 間隔 ${cur.poisonInterval}f→${next.poisonInterval}f / 傷害 ${cur.poisonDamage}→${next.poisonDamage}`;
         }
-        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}`;
+        return `${pathName} [${currentTier}→${nextTier}]\n轉化時間 ${cur.convertTime}f→${next.convertTime}f / 青蛙 HP ${cur.frogHp}→${next.frogHp} / ATK ${cur.frogAtk}→${next.frogAtk}${frogCapText}${poisonText}\n現存召喚物回復 25% 最大生命`;
     }
 
     return pathName;
