@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.18 (數值校調版)</title>
+<title>Roguelike 生存：極限試煉 v7.19 (極致平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -307,7 +307,7 @@ function recalcSummonStats(s) {
     const b = Math.min(s.pathTiers.b, 8);
     const c = s.pathTiers.c; 
 
-    // 新版被動機制時程表 (數量與冷卻)
+    // 新版被動機制時程表
     let passiveHounds = 0;
     let passiveHoundSpawnRed = 0;
     let passiveFrogs = 0;
@@ -319,7 +319,6 @@ function recalcSummonStats(s) {
     if (player.level >= 4) passiveFrogs += 1;          // Lv 4：🐸 青蛙上限 +1
     if (player.level >= 5) passiveHounds += 1;         // Lv 5：🐕 獵犬上限 +1
     if (player.level >= 6) passiveFrogs += 1;          // Lv 6：🐸 青蛙上限 +1
-    // 7 等以後不再獲得額外被動上限或冷卻
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
@@ -327,30 +326,37 @@ function recalcSummonStats(s) {
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
-    // 本體等級自然成長
+    // 本體等級自然成長 (救 C流 中期)
     let levelAtkBonus = player.level * 1.5;
     let levelHpBonus = player.level * 15;
 
-    // 獵犬：閃電刺客 (A路線 ATK下調為+4)
-    s.houndHp = 120 + (a * 15);
-    s.houndAtk = 8 + levelAtkBonus + (a * 4);
-    s.houndAttackInterval = 30; 
+    // 獵犬：閃電刺客
+    // 基礎 HP維持，A路線每級+20 (微調)
+    s.houndHp = 120 + (a * 20);
+    // 基礎 ATK下調為 5
+    s.houndAtk = 5 + levelAtkBonus + (a * 4);
+    // 新增：A路線每次升級攻擊間隔 -1.5f (基礎 30f)
+    s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
     s.houndBaseSpeed = 3.5 + (a * 0.25); 
     
-    // 獵犬暴擊機率：基礎 0%，第5級解鎖 8%，A路線每階 +1%
+    // 獵犬暴擊機率與倍率
     s.houndCritChance = (s.isSpecial ? 0.08 : 0) + (a * 0.01);
+    s.houndCritMultiplier = 2.5; // 暴擊傷害倍率提升為 250%
     
-    // 青蛙：重裝法坦 (B路線 HP下調為+30)
-    s.frogHp = 150 + levelHpBonus + (b * 30);
+    // 青蛙：重裝法坦
+    // 基礎 HP下調為 100
+    s.frogHp = 100 + levelHpBonus + (b * 30);
     s.frogAtk = 4 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
 
-    s.poisonRadius = 90 + (b * 5); 
+    // 基礎毒圈半徑提升至 110，B路線每級+3
+    s.poisonRadius = 110 + (b * 3); 
     s.poisonInterval = 20; 
-    s.poisonDamage = 3 + (b * 2); // 毒圈基礎傷害提升為 3
+    s.poisonDamage = 3 + (b * 2); 
 
-    s.summonDamageReduction = s.isSpecial ? 0.20 : 0;
+    // Lv 5 減傷微調為 25%
+    s.summonDamageReduction = s.isSpecial ? 0.25 : 0;
 }
 
 function healExistingSummonsByRatio(ratio) {
@@ -878,9 +884,10 @@ class Summon {
                     
                     let finalDamage = this.atk;
                     let isCrit = false;
-                    // 使用新的獨立暴擊機率計算
+                    
+                    // 套用更新後的爆擊倍率
                     if (this.type === 'hound' && player.skillStats.houndCritChance && Math.random() < player.skillStats.houndCritChance) { 
-                        finalDamage *= 2; 
+                        finalDamage *= player.skillStats.houndCritMultiplier; // 2.5倍傷害
                         isCrit = true;
                     }
 
