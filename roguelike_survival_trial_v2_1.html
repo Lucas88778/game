@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.11 (霸體魔王版)</title>
+<title>Roguelike 生存：極限試煉 v7.13 (魔王精確反擊版)</title>
 <style>
     body {
         margin: 0;
@@ -33,7 +33,7 @@
         text-align: center;
         pointer-events: auto;
         width: 88%;
-        max-width: 540px;
+        max-width: 560px;
         box-sizing: border-box;
     }
 
@@ -171,7 +171,7 @@
     </div>
 
     <div id="upgrade-screen" class="panel hidden">
-        <h2 id="upgrade-title" style="white-space: pre-line;">技能強化！</h2>
+        <h2 id="upgrade-title" style="white-space: pre-wrap; font-size: 18px; line-height: 1.4;">技能強化！</h2>
         <div id="upgrade-options"></div>
     </div>
 
@@ -228,7 +228,6 @@ const joystick = {
     maxRadius: 50
 };
 
-// 絕對公平的 Fisher-Yates 洗牌演算法
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -292,7 +291,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：解鎖🐸毒圈+召喚物減傷40%',
+            desc: '超級強化：解鎖🐸毒圈+召喚物減傷20%',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -307,7 +306,6 @@ function recalcSummonStats(s) {
     const b = Math.min(s.pathTiers.b, 8);
     const c = s.pathTiers.c; 
 
-    // 新版階段性被動機制解算 (1/5獵犬上限, 2獵犬加速, 3/7青蛙上限, 4青蛙加速)
     let passiveHounds = 0;
     let passiveHoundSpawnRed = 0;
     let passiveFrogs = 0;
@@ -317,33 +315,32 @@ function recalcSummonStats(s) {
     if (player.level >= 2) passiveHoundSpawnRed += 30;
     if (player.level >= 3) passiveFrogs += 1;
     if (player.level >= 4) passiveFrogConvRed += 45;
-    if (player.level >= 6) passiveHounds += 1;
+    if (player.level >= 5) passiveHounds += 1;
+    if (player.level >= 6) passiveHoundSpawnRed += 30;
     if (player.level >= 7) passiveFrogs += 1;
+    if (player.level >= 8) passiveFrogConvRed += 45;
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
     
-    // C路線不鎖定最低時間，允許突破 0 進入極限暴走
-    s.spawnInterval = 300 - passiveHoundSpawnRed - (c * 25); 
-    s.tetherDuration = 480 - passiveFrogConvRed - (c * 35); 
+    s.spawnInterval = 300 - passiveHoundSpawnRed - Math.round(c * (210 / 9)); 
+    s.tetherDuration = 480 - passiveFrogConvRed - Math.round(c * (345 / 9)); 
 
-    // 獵犬：閃電刺客
     s.houndHp = 120 + (a * 15);
-    s.houndAtk = 12 + (a * 6);
+    s.houndAtk = 8 + (a * 6);
     s.houndAttackInterval = 30; 
     s.houndBaseSpeed = 3.5 + (a * 0.25); 
     
-    // 青蛙：重裝法坦
     s.frogHp = 150 + (b * 50);
-    s.frogAtk = 6 + (b * 2);
+    s.frogAtk = 4 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
 
     s.poisonRadius = 90 + (b * 5); 
     s.poisonInterval = 20; 
-    s.poisonDamage = 3 + (b * 2); 
+    s.poisonDamage = 2 + (b * 2); 
 
-    s.summonDamageReduction = s.isSpecial ? 0.40 : 0;
+    s.summonDamageReduction = s.isSpecial ? 0.20 : 0;
 }
 
 function healExistingSummonsByRatio(ratio) {
@@ -369,7 +366,6 @@ function applySummonUpgrade(pathKey) {
     return true;
 }
 
-// 極簡化文字
 function getSummonUpgradeLabel(pathKey) {
     if (pathKey === 'a') return '🐕獵犬強化';
     if (pathKey === 'b') return '🐸 青蛙強化';
@@ -456,6 +452,7 @@ function startGame(skillId) {
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
     document.getElementById('status').classList.remove('hidden');
+    document.getElementById('upgrade-title').style.fontSize = "18px";
 
     updateUI();
     updateSummonCountUI();
@@ -575,7 +572,6 @@ class Enemy {
         let targetHitDist = player.size + this.size;
         let targetObj = player;
 
-        // 大魔王(Boss)無視嘲諷，永遠鎖定主角
         if (this.type !== 'boss' && this.tauntedBy && this.tauntedBy.hp > 0) {
             let sHitDist = this.size + this.tauntedBy.size;
             let sDx = this.tauntedBy.x - this.x;
@@ -606,7 +602,6 @@ class Enemy {
 
         this.slowMultiplier = 1.0;
 
-        // 對主要目標造成傷害
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
@@ -618,18 +613,22 @@ class Enemy {
             }
         }
 
-        // 大魔王(Boss)碰撞踐踏：對所有碰到他的召喚物造成傷害
+        // 大魔王(Boss)碰撞邏輯：只對「鎖定他」且「發生碰撞/攻擊」的召喚物造成傷害
         if (this.type === 'boss') {
             for (let i = 0; i < summons.length; i++) {
                 let sum = summons[i];
                 if (sum.isSpawning || sum.hp <= 0) continue;
-                let sx = sum.x - this.x;
-                let sy = sum.y - this.y;
-                let sDistSq = sx * sx + sy * sy;
-                let sHitDist = this.size + sum.size;
-                if (sDistSq < sHitDist * sHitDist) {
-                    const reduction = sum.damageReduction || 0;
-                    sum.hp -= 0.5 * (1 - reduction);
+                
+                // 只有鎖定大魔王的召喚物，才會受到大魔王的接觸傷害
+                if (sum.target === this) {
+                    let sx = sum.x - this.x;
+                    let sy = sum.y - this.y;
+                    let sDistSq = sx * sx + sy * sy;
+                    let sHitDist = this.size + sum.size;
+                    if (sDistSq < sHitDist * sHitDist) {
+                        const reduction = sum.damageReduction || 0;
+                        sum.hp -= 0.5 * (1 - reduction);
+                    }
                 }
             }
         }
@@ -739,7 +738,7 @@ class Summon {
 
         let currentSpeed = this.baseSpeed;
         if (this.killSpeedBuffTimer > 0) {
-            currentSpeed += 0.5; // 擊殺獲得 +0.5 跑速
+            currentSpeed += 0.5;
             this.killSpeedBuffTimer--;
         }
 
@@ -1384,7 +1383,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）";
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）\n大魔王只會鎖定主角，不會與召喚物1v1\n但召喚物還是可以鎖定他，不過會對所有鎖定他的召喚物造成碰撞傷害";
             const pathKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
