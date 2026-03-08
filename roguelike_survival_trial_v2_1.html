@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.14 (獵犬爆擊覺醒版)</title>
+<title>Roguelike 生存：極限試煉 v7.15 (精準補兵與爆擊調整版)</title>
 <style>
     body {
         margin: 0;
@@ -316,8 +316,10 @@ function recalcSummonStats(s) {
     if (player.level >= 2) passiveHoundSpawnRed += 30;
     if (player.level >= 3) passiveFrogs += 1;
     if (player.level >= 4) passiveFrogConvRed += 45;
-    if (player.level >= 6) passiveHounds += 1;
+    if (player.level >= 5) passiveHounds += 1;
+    if (player.level >= 6) passiveHoundSpawnRed += 30;
     if (player.level >= 7) passiveFrogs += 1;
+    if (player.level >= 8) passiveFrogConvRed += 45;
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
@@ -461,7 +463,6 @@ function startGame(skillId) {
 }
 
 class DamageText {
-    // 新增 isCrit 參數，用來判斷是否為爆擊
     constructor(x, y, damage, color, isCrit = false) {
         this.x = x + (Math.random() - 0.5) * 30;
         this.y = y + (Math.random() - 0.5) * 10;
@@ -469,7 +470,6 @@ class DamageText {
         this.color = color;
         this.isCrit = isCrit;
         
-        // 如果是爆擊，文字生命週期稍微拉長，讓玩家看清楚
         this.life = isCrit ? 45 : 35;
         this.maxLife = this.life;
         this.vy = -1.5 - Math.random();
@@ -484,7 +484,6 @@ class DamageText {
         ctx.globalAlpha = this.life / this.maxLife;
         ctx.fillStyle = this.color;
         
-        // 爆擊時放大字體，並加上驚嘆號
         if (this.isCrit) {
             ctx.font = 'bold 24px Arial';
             this.displayText = `${this.damage}!`;
@@ -748,7 +747,6 @@ class Summon {
 
         let currentSpeed = this.baseSpeed;
         if (this.killSpeedBuffTimer > 0) {
-            // 擊殺跑速加成提升為 +1.0
             currentSpeed += 1.0; 
             this.killSpeedBuffTimer--;
         }
@@ -869,17 +867,15 @@ class Summon {
 
                 if (actualDx * actualDx + actualDy * actualDy < (hitDist * 2.2) * (hitDist * 2.2)) {
                     
-                    // 獵犬爆擊系統判定 (10% 機率)
                     let finalDamage = this.atk;
                     let isCrit = false;
-                    if (this.type === 'hound' && Math.random() < 0.10) {
-                        finalDamage *= 2; // 兩倍傷害
+                    if (this.type === 'hound' && Math.random() < 0.05) { // 5% 爆擊機率
+                        finalDamage *= 2; 
                         isCrit = true;
                     }
 
                     this.target.hp -= finalDamage;
                     
-                    // 傳入 isCrit 參數給 DamageText 產生爆擊視覺效果
                     damageTexts.push(new DamageText(
                         this.target.x,
                         this.target.y,
@@ -939,7 +935,6 @@ class Summon {
                 ctx.font = `${this.size * 2}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                // 殘影距離稍微拉開，以配合提升後的衝刺速度
                 ctx.fillText(this.emoji, this.x - 8, this.y);
                 ctx.fillText(this.emoji, this.x + 8, this.y);
                 ctx.restore();
@@ -1291,14 +1286,14 @@ function fireSkill() {
     if (player.skill === 'summon') {
         const houndCount = summons.filter(sum => sum.type === 'hound').length;
 
+        // 若目前場上數量小於上限數量時，自動施展。達上限數量時則暫停 (不歸零計時器，維持進度)
         if (houndCount < s.maxHounds) {
             s.houndSpawnTimer++;
-            if (s.houndSpawnTimer >= s.spawnInterval) {
+            // 確保計時器不會因為負數而卡住 (至少為1)
+            if (s.houndSpawnTimer >= Math.max(1, s.spawnInterval)) {
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
             }
-        } else {
-            s.houndSpawnTimer = 0;
         }
 
         if (!s.currentTetherTarget || s.currentTetherTarget.hp <= 0 || s.currentTetherTarget.isFading) {
