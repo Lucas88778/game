@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.15 (精準補兵與爆擊調整版)</title>
+<title>Roguelike 生存：極限試煉 v7.17 (被動曲線優化版)</title>
 <style>
     body {
         margin: 0;
@@ -307,25 +307,25 @@ function recalcSummonStats(s) {
     const b = Math.min(s.pathTiers.b, 8);
     const c = s.pathTiers.c; 
 
+    // 新版被動機制時程表
     let passiveHounds = 0;
     let passiveHoundSpawnRed = 0;
     let passiveFrogs = 0;
     let passiveFrogConvRed = 0;
 
-    if (player.level >= 1) passiveHounds += 1;
-    if (player.level >= 2) passiveHoundSpawnRed += 30;
-    if (player.level >= 3) passiveFrogs += 1;
-    if (player.level >= 4) passiveFrogConvRed += 45;
-    if (player.level >= 5) passiveHounds += 1;
-    if (player.level >= 6) passiveHoundSpawnRed += 30;
-    if (player.level >= 7) passiveFrogs += 1;
-    if (player.level >= 8) passiveFrogConvRed += 45;
+    if (player.level >= 1) passiveHoundSpawnRed += 30; // Lv 1：🐕 召喚間隔 -30f
+    if (player.level >= 2) passiveFrogConvRed += 45;   // Lv 2：🐸 牽引轉化 -45f
+    if (player.level >= 3) passiveHounds += 1;         // Lv 3：🐕 獵犬上限 +1
+    if (player.level >= 4) passiveFrogs += 1;          // Lv 4：🐸 青蛙上限 +1
+    if (player.level >= 5) passiveHounds += 1;         // Lv 5：🐕 獵犬上限 +1
+    if (player.level >= 6) passiveFrogs += 1;          // Lv 6：🐸 青蛙上限 +1
+    // 7 等以後不再獲得被動提升
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
     
-    s.spawnInterval = 300 - passiveHoundSpawnRed - Math.round(c * (210 / 9)); 
-    s.tetherDuration = 480 - passiveFrogConvRed - Math.round(c * (345 / 9)); 
+    s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
+    s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
     s.houndHp = 120 + (a * 15);
     s.houndAtk = 8 + (a * 6);
@@ -1286,10 +1286,9 @@ function fireSkill() {
     if (player.skill === 'summon') {
         const houndCount = summons.filter(sum => sum.type === 'hound').length;
 
-        // 若目前場上數量小於上限數量時，自動施展。達上限數量時則暫停 (不歸零計時器，維持進度)
+        // 若目前場上數量小於上限數量時自動施展，達上限數量時則暫停 (不歸零，保留冷卻進度)
         if (houndCount < s.maxHounds) {
             s.houndSpawnTimer++;
-            // 確保計時器不會因為負數而卡住 (至少為1)
             if (s.houndSpawnTimer >= Math.max(1, s.spawnInterval)) {
                 summons.push(new Summon(player.x, player.y, 'hound'));
                 s.houndSpawnTimer = 0;
