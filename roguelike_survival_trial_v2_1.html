@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.13 (魔王精確反擊版)</title>
+<title>Roguelike 生存：極限試煉 v7.14 (獵犬爆擊覺醒版)</title>
 <style>
     body {
         margin: 0;
@@ -228,6 +228,7 @@ const joystick = {
     maxRadius: 50
 };
 
+// 絕對公平的 Fisher-Yates 洗牌演算法
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -315,10 +316,8 @@ function recalcSummonStats(s) {
     if (player.level >= 2) passiveHoundSpawnRed += 30;
     if (player.level >= 3) passiveFrogs += 1;
     if (player.level >= 4) passiveFrogConvRed += 45;
-    if (player.level >= 5) passiveHounds += 1;
-    if (player.level >= 6) passiveHoundSpawnRed += 30;
+    if (player.level >= 6) passiveHounds += 1;
     if (player.level >= 7) passiveFrogs += 1;
-    if (player.level >= 8) passiveFrogConvRed += 45;
 
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 3 + passiveFrogs + c;
@@ -462,13 +461,17 @@ function startGame(skillId) {
 }
 
 class DamageText {
-    constructor(x, y, damage, color) {
+    // 新增 isCrit 參數，用來判斷是否為爆擊
+    constructor(x, y, damage, color, isCrit = false) {
         this.x = x + (Math.random() - 0.5) * 30;
         this.y = y + (Math.random() - 0.5) * 10;
         this.damage = Math.round(damage);
         this.color = color;
-        this.life = 35;
-        this.maxLife = 35;
+        this.isCrit = isCrit;
+        
+        // 如果是爆擊，文字生命週期稍微拉長，讓玩家看清楚
+        this.life = isCrit ? 45 : 35;
+        this.maxLife = this.life;
         this.vy = -1.5 - Math.random();
     }
     update() {
@@ -480,12 +483,21 @@ class DamageText {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
         ctx.fillStyle = this.color;
-        ctx.font = 'bold 18px Arial';
+        
+        // 爆擊時放大字體，並加上驚嘆號
+        if (this.isCrit) {
+            ctx.font = 'bold 24px Arial';
+            this.displayText = `${this.damage}!`;
+        } else {
+            ctx.font = 'bold 18px Arial';
+            this.displayText = `${this.damage}`;
+        }
+        
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText(this.damage, this.x, this.y);
-        ctx.fillText(this.damage, this.x, this.y);
+        ctx.strokeText(this.displayText, this.x, this.y);
+        ctx.fillText(this.displayText, this.x, this.y);
         ctx.restore();
     }
 }
@@ -613,13 +625,11 @@ class Enemy {
             }
         }
 
-        // 大魔王(Boss)碰撞邏輯：只對「鎖定他」且「發生碰撞/攻擊」的召喚物造成傷害
         if (this.type === 'boss') {
             for (let i = 0; i < summons.length; i++) {
                 let sum = summons[i];
                 if (sum.isSpawning || sum.hp <= 0) continue;
                 
-                // 只有鎖定大魔王的召喚物，才會受到大魔王的接觸傷害
                 if (sum.target === this) {
                     let sx = sum.x - this.x;
                     let sy = sum.y - this.y;
@@ -738,7 +748,8 @@ class Summon {
 
         let currentSpeed = this.baseSpeed;
         if (this.killSpeedBuffTimer > 0) {
-            currentSpeed += 0.5;
+            // 擊殺跑速加成提升為 +1.0
+            currentSpeed += 1.0; 
             this.killSpeedBuffTimer--;
         }
 
@@ -857,12 +868,24 @@ class Summon {
                 const hitDist = this.size + this.target.size;
 
                 if (actualDx * actualDx + actualDy * actualDy < (hitDist * 2.2) * (hitDist * 2.2)) {
-                    this.target.hp -= this.atk;
+                    
+                    // 獵犬爆擊系統判定 (10% 機率)
+                    let finalDamage = this.atk;
+                    let isCrit = false;
+                    if (this.type === 'hound' && Math.random() < 0.10) {
+                        finalDamage *= 2; // 兩倍傷害
+                        isCrit = true;
+                    }
+
+                    this.target.hp -= finalDamage;
+                    
+                    // 傳入 isCrit 參數給 DamageText 產生爆擊視覺效果
                     damageTexts.push(new DamageText(
                         this.target.x,
                         this.target.y,
-                        this.atk,
-                        this.type === 'hound' ? '#FF9800' : '#8BC34A'
+                        finalDamage,
+                        this.type === 'hound' ? (isCrit ? '#FFD700' : '#FF9800') : '#8BC34A',
+                        isCrit
                     ));
                     
                     if (this.target.hp <= 0 && this.type === 'hound') {
@@ -916,8 +939,9 @@ class Summon {
                 ctx.font = `${this.size * 2}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(this.emoji, this.x - 5, this.y);
-                ctx.fillText(this.emoji, this.x + 5, this.y);
+                // 殘影距離稍微拉開，以配合提升後的衝刺速度
+                ctx.fillText(this.emoji, this.x - 8, this.y);
+                ctx.fillText(this.emoji, this.x + 8, this.y);
                 ctx.restore();
             }
 
