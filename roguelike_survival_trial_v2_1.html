@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.24 (裂地護主版)</title>
+<title>Roguelike 生存：極限試煉 v7.25 (全軍護主版)</title>
 <style>
     body {
         margin: 0;
@@ -76,7 +76,7 @@
         font-weight: bold;
         font-size: 20px;
         padding: 15px;
-        white-space: pre-wrap; /* 允許文字換行 */
+        white-space: pre-wrap;
         line-height: 1.4;
     }
     .btn-upgrade:hover { background: #1976D2; }
@@ -324,27 +324,27 @@ function recalcSummonStats(s) {
         passiveFrogs += 1;  
     }
 
-    s.maxHounds = 2 + passiveHounds + c;
+    // 獵犬初始上限為 1
+    s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 2 + passiveFrogs + c;
     
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
     let levelAtkBonus = player.level * 1.25;
-    let levelHpBonus = player.level * 12.5;
+    let levelHpBonus = player.level * 10; // 青蛙每級改為 +10
 
     // 獵犬：閃電刺客
-    s.houndHp = 120 + (a * 20);
+    s.houndHp = 120 + (a * 25); // HP 強化改為 +25
     s.houndAtk = 5 + levelAtkBonus + (a * 3); 
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
     s.houndBaseSpeed = 3.5 + (a * 0.4); 
     
-    // 爆擊機率改為基本體質 (10%)
     s.houndCritChance = 0.10;
     s.houndCritMultiplier = 2.5; 
     
     // 青蛙：重裝法坦
-    s.frogHp = 100 + levelHpBonus + (b * 30);
+    s.frogHp = 125 + levelHpBonus + (b * 30); // 初始血量提升至 125
     s.frogAtk = 4 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
@@ -353,7 +353,6 @@ function recalcSummonStats(s) {
     s.poisonInterval = 20; 
     s.poisonDamage = 2 + (b * 1.5); 
 
-    // 移除 15% 減傷
     s.summonDamageReduction = 0;
 }
 
@@ -475,33 +474,21 @@ function startGame(skillId) {
     requestAnimationFrame(gameLoop);
 }
 
-// 觸發護主神犬機制 (新增 Lv5 技能鎖)
+// 觸發護主神犬機制 (全部獵犬共同衝刺)
 function triggerHoundRevenge(aggressor) {
     if (player.skill !== 'summon') return;
-    if (!player.skillStats.isSpecial) return; // 必須達到 Lv5 才能護主
-    
-    let bestHound = null;
-    let minDistSq = Infinity;
+    if (!player.skillStats.isSpecial) return; 
     
     for (let i = 0; i < summons.length; i++) {
         let s = summons[i];
-        if (s.type === 'hound' && s.revengeCooldown <= 0 && !s.isSpawning && s.hp > 0) {
-            let dSq = (s.x - aggressor.x) * (s.x - aggressor.x) + (s.y - aggressor.y) * (s.y - aggressor.y);
-            if (dSq < minDistSq) {
-                minDistSq = dSq;
-                bestHound = s;
-            }
+        if (s.type === 'hound' && !s.isSpawning && s.hp > 0) {
+            s.isDashing = true;
+            s.dashTimer = 15; 
+            s.target = aggressor;
+            aggressor.tauntedBy = s; // 強制仇恨轉移
+            s.attackCooldown = 0; 
+            s.trail = []; 
         }
-    }
-    
-    if (bestHound) {
-        bestHound.revengeCooldown = 300; 
-        bestHound.isDashing = true;
-        bestHound.dashTimer = 15; 
-        bestHound.target = aggressor;
-        aggressor.tauntedBy = bestHound;
-        bestHound.attackCooldown = 0; 
-        bestHound.trail = []; 
     }
 }
 
@@ -568,19 +555,19 @@ class TransformPoof {
     }
 }
 
-// 新增：裂地特效 (GroundCrack)
+// 裂地特效 (移除圓形底色，保留並加強裂痕)
 class GroundCrack {
     constructor(x, y, radius) {
         this.x = x;
         this.y = y;
         this.radius = radius;
-        this.life = 45; // 顯示 45 幀
+        this.life = 45; 
         this.maxLife = 45;
         this.cracks = [];
-        let numCracks = 5 + Math.floor(Math.random() * 2);
+        let numCracks = 6 + Math.floor(Math.random() * 3);
         for (let i = 0; i < numCracks; i++) {
             let angle = (Math.PI * 2 / numCracks) * i + (Math.random() - 0.5);
-            this.cracks.push({ angle: angle, length: radius * (0.6 + Math.random() * 0.4) });
+            this.cracks.push({ angle: angle, length: radius * (0.7 + Math.random() * 0.3) });
         }
     }
     update() {
@@ -591,18 +578,8 @@ class GroundCrack {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
         
-        // 衝擊波範圍底色
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(139, 69, 19, 0.2)'; // 泥土色半透明
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 140, 0, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        // 不規則的裂地痕跡
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#4a2511';
+        ctx.strokeStyle = '#6b3e20'; // 更明顯的深土色
         ctx.beginPath();
         for (let c of this.cracks) {
             ctx.moveTo(this.x, this.y);
@@ -659,6 +636,7 @@ class Enemy {
         this.frostHitCount = 0;
         this.slowMultiplier = 1.0;
         this.tauntedBy = null;
+        this.hasTriggeredRevenge = false; // 紀錄是否已經觸發過護主
 
         this.isFading = false;
         this.fadeDuration = 45;
@@ -668,6 +646,7 @@ class Enemy {
     update() {
         if (this.isFading) return;
 
+        // 暈眩狀態：完全無法移動、無法攻擊
         if (this.stunTimer > 0) {
             this.stunTimer--;
             this.slowMultiplier = 1.0;
@@ -718,7 +697,13 @@ class Enemy {
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
-                triggerHoundRevenge(this); 
+                
+                // 每個敵人只能觸發一次全軍護主
+                if (!this.hasTriggeredRevenge) {
+                    this.hasTriggeredRevenge = true;
+                    triggerHoundRevenge(this); 
+                }
+
                 if (player.hp <= 0) gameOver(false);
             } else {
                 const reduction = targetObj.damageReduction || 0;
@@ -797,7 +782,6 @@ class Summon {
         this.attackCooldown = 0;
         this.poisonTimer = 0;
         
-        this.revengeCooldown = 0;
         this.isDashing = false;
         this.dashTimer = 0;
         this.trail = [];
@@ -855,8 +839,6 @@ class Summon {
             }
             return true;
         }
-
-        if (this.revengeCooldown > 0) this.revengeCooldown--;
         
         if (this.type === 'hound') {
             this.trail.push({x: this.x, y: this.y});
@@ -888,11 +870,11 @@ class Summon {
                 this.isDashing = false;
                 let stunRadius = 80; 
                 
-                // 產生裂地視覺特效
                 effects.push(new GroundCrack(this.x, this.y, stunRadius));
                 
                 enemies.forEach(e => {
-                    if (e.hp > 0 && !e.isFading) {
+                    // 大魔王免疫暈眩
+                    if (e.hp > 0 && !e.isFading && e.type !== 'boss') {
                         let dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
                         if (dSq < stunRadius * stunRadius) {
                             e.stunTimer = 15; 
@@ -1073,8 +1055,9 @@ class Summon {
             ctx.fillText(this.emoji, this.x, this.y);
             ctx.restore();
         } else {
+            // 毒圈透明度大幅調低 (0.06)
             if (this.type === 'frog' && player.skillStats.isSpecial) {
-                ctx.fillStyle = 'rgba(118, 255, 3, 0.18)';
+                ctx.fillStyle = 'rgba(118, 255, 3, 0.06)';
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, player.skillStats.poisonRadius, 0, Math.PI * 2);
                 ctx.fill();
