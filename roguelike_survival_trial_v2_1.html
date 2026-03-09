@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.21 (極致平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.22 (極致平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -338,8 +338,8 @@ function recalcSummonStats(s) {
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
     s.houndBaseSpeed = 3.5 + (a * 0.25); 
     
-    // 獵犬暴擊機率與倍率
-    s.houndCritChance = (s.isSpecial ? 0.08 : 0) + (a * 0.01);
+    // 獵犬暴擊機率與倍率 (移除A路線升級的1%爆擊，Lv5基礎改為10%)
+    s.houndCritChance = s.isSpecial ? 0.10 : 0;
     s.houndCritMultiplier = 2.5; 
     
     // 青蛙：重裝法坦
@@ -461,8 +461,6 @@ function startGame(skillId) {
 
     level10Frames = 0;
     bossIsDead = false;
-
-    // 已移除開局立即獲得一隻獵犬的設定
 
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
@@ -704,10 +702,6 @@ class Summon {
         this.poisonTimer = 0;
         
         this.killSpeedBuffTimer = 0;
-        
-        // 嗜血狂亂相關屬性
-        this.hasFrenzyReady = false; 
-        this.frenzyTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
         this.refreshStats(true);
@@ -860,20 +854,9 @@ class Summon {
                     this.targetOffset = { x: hitDist * 0.75, y: yOff };
                 }
             }
-            
-            // 成功鎖定新敵人，且有準備好的狂亂狀態，觸發 60f 攻速 buff (下調為 -5f)
-            if (this.target && this.hasFrenzyReady && this.type === 'hound') {
-                this.hasFrenzyReady = false;
-                this.frenzyTimer = 60;
-                // 立刻加速當下的攻擊倒數 (改為 -5f)
-                this.attackCooldown = Math.max(0, this.attackCooldown - 5);
-            }
         }
 
         if (this.target) {
-            // 在鎖定敵人的期間倒數狂亂時間
-            if (this.frenzyTimer > 0) this.frenzyTimer--;
-
             const idealX = this.target.x + this.targetOffset.x;
             const idealY = this.target.y + this.targetOffset.y;
 
@@ -914,18 +897,13 @@ class Summon {
                         isCrit
                     ));
                     
-                    // 獵犬擊殺判定：獲得跑速與狂亂準備狀態
+                    // 獵犬擊殺判定：獲得跑速增益
                     if (this.target.hp <= 0 && this.type === 'hound') {
                         this.killSpeedBuffTimer = 60;
-                        this.hasFrenzyReady = true; 
                     }
                     
-                    // 計算下一次的攻擊間隔 (若處於狂亂中則 -5f)
-                    let currentAtkInterval = this.attackInterval;
-                    if (this.frenzyTimer > 0) {
-                        currentAtkInterval = Math.max(1, currentAtkInterval - 5);
-                    }
-                    this.attackCooldown = currentAtkInterval;
+                    // 重置攻擊冷卻
+                    this.attackCooldown = this.attackInterval;
                 }
             }
         } else {
@@ -966,8 +944,8 @@ class Summon {
                 ctx.fill();
             }
 
-            // 顯示獵犬殘影 (跑速或攻速增益時皆顯示)
-            if (this.type === 'hound' && (this.killSpeedBuffTimer > 0 || this.frenzyTimer > 0)) {
+            // 顯示獵犬殘影 (跑速增益時顯示)
+            if (this.type === 'hound' && this.killSpeedBuffTimer > 0) {
                 ctx.save();
                 ctx.globalAlpha = 0.3;
                 ctx.font = `${this.size * 2}px Arial`;
