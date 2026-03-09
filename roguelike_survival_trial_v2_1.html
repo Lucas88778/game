@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.20 (極致平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.21 (極致平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -319,7 +319,7 @@ function recalcSummonStats(s) {
     if (player.level >= 4) passiveFrogs += 1;          // Lv 4：🐸 青蛙上限 +1
     if (player.level >= 5) passiveHounds += 1;         // Lv 5：🐕 獵犬上限 +1
     if (player.level >= 6) passiveFrogs += 1;          // Lv 6：🐸 青蛙上限 +1
-    if (player.level >= 10) passiveHounds += 1;        // Lv 10：🐕 獵犬上限 +1 (新增)
+    if (player.level >= 10) passiveHounds += 1;        // Lv 10：🐕 獵犬上限 +1
 
     // 開局獵犬上限改為 2，並套用被動
     s.maxHounds = 2 + passiveHounds + c;
@@ -328,7 +328,7 @@ function recalcSummonStats(s) {
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
-    // 本體等級自然成長 (救 C流 中期)
+    // 本體等級自然成長
     let levelAtkBonus = player.level * 1.5;
     let levelHpBonus = player.level * 15;
 
@@ -352,7 +352,7 @@ function recalcSummonStats(s) {
     s.poisonInterval = 20; 
     s.poisonDamage = 3 + (b * 2); 
 
-    // Lv 5 減傷改為 15%
+    // Lv 5 減傷維持 15%
     s.summonDamageReduction = s.isSpecial ? 0.15 : 0;
 }
 
@@ -462,10 +462,7 @@ function startGame(skillId) {
     level10Frames = 0;
     bossIsDead = false;
 
-    // 若選擇召喚，開局立即獲得一隻獵犬
-    if (skillId === 'summon') {
-        summons.push(new Summon(player.x, player.y, 'hound'));
-    }
+    // 已移除開局立即獲得一隻獵犬的設定
 
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('exp-bar-container').classList.remove('hidden');
@@ -864,12 +861,12 @@ class Summon {
                 }
             }
             
-            // 成功鎖定新敵人，且有準備好的狂亂狀態，觸發 60f 攻速 buff
+            // 成功鎖定新敵人，且有準備好的狂亂狀態，觸發 60f 攻速 buff (下調為 -5f)
             if (this.target && this.hasFrenzyReady && this.type === 'hound') {
                 this.hasFrenzyReady = false;
                 this.frenzyTimer = 60;
-                // 立刻加速當下的攻擊倒數
-                this.attackCooldown = Math.max(0, this.attackCooldown - 15);
+                // 立刻加速當下的攻擊倒數 (改為 -5f)
+                this.attackCooldown = Math.max(0, this.attackCooldown - 5);
             }
         }
 
@@ -923,10 +920,10 @@ class Summon {
                         this.hasFrenzyReady = true; 
                     }
                     
-                    // 計算下一次的攻擊間隔 (若處於狂亂中則 -15f)
+                    // 計算下一次的攻擊間隔 (若處於狂亂中則 -5f)
                     let currentAtkInterval = this.attackInterval;
                     if (this.frenzyTimer > 0) {
-                        currentAtkInterval = Math.max(1, currentAtkInterval - 15);
+                        currentAtkInterval = Math.max(1, currentAtkInterval - 5);
                     }
                     this.attackCooldown = currentAtkInterval;
                 }
@@ -1536,7 +1533,7 @@ function resumeGameAfterUpgrade() {
         document.getElementById('status').style.color = "#FFEB3B";
         enemies.push(new Enemy(1 + player.level * 0.3, 'boss'));
         
-        // 新增：Lv10 魔王關卡開始時，立即獲得一隻獵犬
+        // Lv10 魔王關卡開始時，立即獲得一隻獵犬 (維持保留)
         if (player.skill === 'summon') {
             summons.push(new Summon(player.x, player.y, 'hound'));
         }
