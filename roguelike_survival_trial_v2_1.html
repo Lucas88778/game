@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.23 (護主神犬版)</title>
+<title>Roguelike 生存：極限試煉 v7.24 (裂地護主版)</title>
 <style>
     body {
         margin: 0;
@@ -76,6 +76,8 @@
         font-weight: bold;
         font-size: 20px;
         padding: 15px;
+        white-space: pre-wrap; /* 允許文字換行 */
+        line-height: 1.4;
     }
     .btn-upgrade:hover { background: #1976D2; }
 
@@ -291,7 +293,7 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：召喚物減傷+🐸毒圈+🐕爆擊',
+            desc: '🐸獲得毒圈+\n受擊時🐕衝刺並造成暈眩（冷卻5秒）',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -318,28 +320,27 @@ function recalcSummonStats(s) {
     if (player.level >= 5) passiveHounds += 1;         
     if (player.level >= 6) passiveFrogs += 1;          
     if (player.level >= 10) {
-        passiveHounds += 2; // Lv10 改為獵犬上限 +2
-        passiveFrogs += 1;  // Lv10 青蛙上限 +1
+        passiveHounds += 2; 
+        passiveFrogs += 1;  
     }
 
-    // 基礎上限：🐕 2、🐸 2
     s.maxHounds = 2 + passiveHounds + c;
     s.maxFrogs = 2 + passiveFrogs + c;
     
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
-    // 本體等級自然成長更新
     let levelAtkBonus = player.level * 1.25;
     let levelHpBonus = player.level * 12.5;
 
     // 獵犬：閃電刺客
     s.houndHp = 120 + (a * 20);
-    s.houndAtk = 5 + levelAtkBonus + (a * 3); // 攻擊力 A 路線每級 +3
+    s.houndAtk = 5 + levelAtkBonus + (a * 3); 
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
-    s.houndBaseSpeed = 3.5 + (a * 0.4); // 移動速度 A 路線每級 +0.4
+    s.houndBaseSpeed = 3.5 + (a * 0.4); 
     
-    s.houndCritChance = s.isSpecial ? 0.10 : 0;
+    // 爆擊機率改為基本體質 (10%)
+    s.houndCritChance = 0.10;
     s.houndCritMultiplier = 2.5; 
     
     // 青蛙：重裝法坦
@@ -350,9 +351,10 @@ function recalcSummonStats(s) {
 
     s.poisonRadius = 110 + (b * 3); 
     s.poisonInterval = 20; 
-    s.poisonDamage = 2 + (b * 1.5); // 基礎 2，B升級 +1.5
+    s.poisonDamage = 2 + (b * 1.5); 
 
-    s.summonDamageReduction = s.isSpecial ? 0.15 : 0;
+    // 移除 15% 減傷
+    s.summonDamageReduction = 0;
 }
 
 function healExistingSummonsByRatio(ratio) {
@@ -473,9 +475,11 @@ function startGame(skillId) {
     requestAnimationFrame(gameLoop);
 }
 
-// 觸發護主神犬機制
+// 觸發護主神犬機制 (新增 Lv5 技能鎖)
 function triggerHoundRevenge(aggressor) {
     if (player.skill !== 'summon') return;
+    if (!player.skillStats.isSpecial) return; // 必須達到 Lv5 才能護主
+    
     let bestHound = null;
     let minDistSq = Infinity;
     
@@ -491,12 +495,12 @@ function triggerHoundRevenge(aggressor) {
     }
     
     if (bestHound) {
-        bestHound.revengeCooldown = 300; // 300幀冷卻
+        bestHound.revengeCooldown = 300; 
         bestHound.isDashing = true;
-        bestHound.dashTimer = 15; // 15幀高速移動
+        bestHound.dashTimer = 15; 
         bestHound.target = aggressor;
         aggressor.tauntedBy = bestHound;
-        bestHound.attackCooldown = 0; // 撞到後可立刻咬一口
+        bestHound.attackCooldown = 0; 
         bestHound.trail = []; 
     }
 }
@@ -564,6 +568,58 @@ class TransformPoof {
     }
 }
 
+// 新增：裂地特效 (GroundCrack)
+class GroundCrack {
+    constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.life = 45; // 顯示 45 幀
+        this.maxLife = 45;
+        this.cracks = [];
+        let numCracks = 5 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < numCracks; i++) {
+            let angle = (Math.PI * 2 / numCracks) * i + (Math.random() - 0.5);
+            this.cracks.push({ angle: angle, length: radius * (0.6 + Math.random() * 0.4) });
+        }
+    }
+    update() {
+        this.life--;
+        return this.life > 0;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / this.maxLife;
+        
+        // 衝擊波範圍底色
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(139, 69, 19, 0.2)'; // 泥土色半透明
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 140, 0, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 不規則的裂地痕跡
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#4a2511';
+        ctx.beginPath();
+        for (let c of this.cracks) {
+            ctx.moveTo(this.x, this.y);
+            let cx = this.x;
+            let cy = this.y;
+            for (let j = 1; j <= 3; j++) {
+                let segLen = c.length / 3;
+                cx += Math.cos(c.angle + (Math.random() - 0.5) * 0.8) * segLen;
+                cy += Math.sin(c.angle + (Math.random() - 0.5) * 0.8) * segLen;
+                ctx.lineTo(cx, cy);
+            }
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
 class Enemy {
     constructor(hpMult, type = 'normal') {
         const angle = Math.random() * Math.PI * 2;
@@ -599,7 +655,7 @@ class Enemy {
         this.maxHp = this.hp;
         this.baseSpeed = this.speed;
         this.frozenTimer = 0;
-        this.stunTimer = 0; // 新增：獵犬暈眩計時器
+        this.stunTimer = 0; 
         this.frostHitCount = 0;
         this.slowMultiplier = 1.0;
         this.tauntedBy = null;
@@ -612,7 +668,6 @@ class Enemy {
     update() {
         if (this.isFading) return;
 
-        // 如果被暈眩，停止移動與攻擊
         if (this.stunTimer > 0) {
             this.stunTimer--;
             this.slowMultiplier = 1.0;
@@ -663,7 +718,7 @@ class Enemy {
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
-                triggerHoundRevenge(this); // 觸發護主機制
+                triggerHoundRevenge(this); 
                 if (player.hp <= 0) gameOver(false);
             } else {
                 const reduction = targetObj.damageReduction || 0;
@@ -710,7 +765,6 @@ class Enemy {
         ctx.textBaseline = 'middle';
         ctx.fillText(this.emoji, this.x, this.y);
         
-        // 顯示暈眩特效
         if (this.stunTimer > 0) {
             ctx.font = `20px Arial`;
             ctx.fillText('💫', this.x, this.y - this.size - 10);
@@ -743,7 +797,6 @@ class Summon {
         this.attackCooldown = 0;
         this.poisonTimer = 0;
         
-        // 護主神犬相關屬性
         this.revengeCooldown = 0;
         this.isDashing = false;
         this.dashTimer = 0;
@@ -805,16 +858,14 @@ class Summon {
 
         if (this.revengeCooldown > 0) this.revengeCooldown--;
         
-        // 記錄軌跡以供衝刺殘影使用
         if (this.type === 'hound') {
             this.trail.push({x: this.x, y: this.y});
             if (this.trail.length > 6) this.trail.shift();
         }
 
-        // 護主高速衝刺狀態處理
         if (this.isDashing) {
             this.dashTimer--;
-            let dashSpeed = this.baseSpeed * 4; // 4倍速衝刺
+            let dashSpeed = this.baseSpeed * 4; 
             
             if (this.target && this.target.hp > 0 && !this.target.isFading) {
                 const dx = this.target.x - this.x;
@@ -827,26 +878,29 @@ class Summon {
                 } else {
                     this.x = this.target.x;
                     this.y = this.target.y;
-                    this.dashTimer = 0; // 撞到目標提早結束衝刺
+                    this.dashTimer = 0; 
                 }
             } else {
                 this.dashTimer = 0;
             }
 
-            // 衝刺結束觸發範圍暈眩
             if (this.dashTimer <= 0) {
                 this.isDashing = false;
-                let stunRadius = 60; // 小範圍
+                let stunRadius = 80; 
+                
+                // 產生裂地視覺特效
+                effects.push(new GroundCrack(this.x, this.y, stunRadius));
+                
                 enemies.forEach(e => {
                     if (e.hp > 0 && !e.isFading) {
                         let dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
                         if (dSq < stunRadius * stunRadius) {
-                            e.stunTimer = 15; // 造成15幀暈眩
+                            e.stunTimer = 15; 
                         }
                     }
                 });
             }
-            return this.hp > 0; // 衝刺期間跳過一般索敵移動
+            return this.hp > 0; 
         }
 
         let currentSpeed = this.baseSpeed;
@@ -1026,7 +1080,6 @@ class Summon {
                 ctx.fill();
             }
 
-            // 繪製護主衝刺的明顯殘影
             if (this.type === 'hound' && this.isDashing) {
                 ctx.save();
                 for (let j = 0; j < this.trail.length; j++) {
