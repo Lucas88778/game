@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.22 (極致平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.23 (極致平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -319,26 +319,26 @@ function recalcSummonStats(s) {
     if (player.level >= 4) passiveFrogs += 1;          // Lv 4：🐸 青蛙上限 +1
     if (player.level >= 5) passiveHounds += 1;         // Lv 5：🐕 獵犬上限 +1
     if (player.level >= 6) passiveFrogs += 1;          // Lv 6：🐸 青蛙上限 +1
-    if (player.level >= 10) passiveHounds += 1;        // Lv 10：🐕 獵犬上限 +1
+    if (player.level >= 10) passiveHounds += 2;        // Lv 10：🐕 獵犬上限改為 +2
 
-    // 開局獵犬上限改為 2，並套用被動
+    // 開局基礎上限：獵犬 2、青蛙 2，並套用被動
     s.maxHounds = 2 + passiveHounds + c;
-    s.maxFrogs = 3 + passiveFrogs + c;
+    s.maxFrogs = 2 + passiveFrogs + c;
     
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
-    // 本體等級自然成長
-    let levelAtkBonus = player.level * 1.5;
-    let levelHpBonus = player.level * 15;
+    // 本體等級自然成長 (依最新設定調整)
+    let levelAtkBonus = player.level * 1.0;  // 每升1級 +1
+    let levelHpBonus = player.level * 10;    // 每升1級 +10
 
     // 獵犬：閃電刺客
     s.houndHp = 120 + (a * 20);
-    s.houndAtk = 5 + levelAtkBonus + (a * 4);
+    s.houndAtk = 5 + levelAtkBonus + (a * 3.5);         // A路線強化改為 +3.5
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
-    s.houndBaseSpeed = 3.5 + (a * 0.25); 
+    s.houndBaseSpeed = 3.5 + (a * 0.4);                 // A路線移動速度強化改為 +0.4
     
-    // 獵犬暴擊機率與倍率 (移除A路線升級的1%爆擊，Lv5基礎改為10%)
+    // 獵犬暴擊機率與倍率
     s.houndCritChance = s.isSpecial ? 0.10 : 0;
     s.houndCritMultiplier = 2.5; 
     
@@ -350,7 +350,7 @@ function recalcSummonStats(s) {
 
     s.poisonRadius = 110 + (b * 3); 
     s.poisonInterval = 20; 
-    s.poisonDamage = 3 + (b * 2); 
+    s.poisonDamage = 2 + (b * 1.5); // 基礎毒圈傷害改為 2，每次升級 +1.5
 
     // Lv 5 減傷維持 15%
     s.summonDamageReduction = s.isSpecial ? 0.15 : 0;
@@ -897,12 +897,10 @@ class Summon {
                         isCrit
                     ));
                     
-                    // 獵犬擊殺判定：獲得跑速增益
                     if (this.target.hp <= 0 && this.type === 'hound') {
                         this.killSpeedBuffTimer = 60;
                     }
                     
-                    // 重置攻擊冷卻
                     this.attackCooldown = this.attackInterval;
                 }
             }
@@ -944,7 +942,6 @@ class Summon {
                 ctx.fill();
             }
 
-            // 顯示獵犬殘影 (跑速增益時顯示)
             if (this.type === 'hound' && this.killSpeedBuffTimer > 0) {
                 ctx.save();
                 ctx.globalAlpha = 0.3;
