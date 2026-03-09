@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.23 (極致平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.23 (護主獵犬版)</title>
 <style>
     body {
         margin: 0;
@@ -319,24 +319,27 @@ function recalcSummonStats(s) {
     if (player.level >= 4) passiveFrogs += 1;          // Lv 4：🐸 青蛙上限 +1
     if (player.level >= 5) passiveHounds += 1;         // Lv 5：🐕 獵犬上限 +1
     if (player.level >= 6) passiveFrogs += 1;          // Lv 6：🐸 青蛙上限 +1
-    if (player.level >= 10) passiveHounds += 2;        // Lv 10：🐕 獵犬上限改為 +2
+    if (player.level >= 10) {
+        passiveHounds += 2; // Lv 10：🐕 獵犬上限 +2
+        passiveFrogs += 1;  // Lv 10：🐸 青蛙上限 +1
+    }
 
-    // 開局基礎上限：獵犬 2、青蛙 2，並套用被動
+    // 開局獵犬上限維持 2，青蛙上限下調為 2
     s.maxHounds = 2 + passiveHounds + c;
     s.maxFrogs = 2 + passiveFrogs + c;
     
     s.spawnInterval = Math.max(15, 240 - passiveHoundSpawnRed - (c * 22)); 
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
-    // 本體等級自然成長 (依最新設定調整)
-    let levelAtkBonus = player.level * 1.0;  // 每升1級 +1
-    let levelHpBonus = player.level * 10;    // 每升1級 +10
+    // 本體等級自然成長 (修改為 1.25 與 12.5)
+    let levelAtkBonus = player.level * 1.25;
+    let levelHpBonus = player.level * 12.5;
 
     // 獵犬：閃電刺客
     s.houndHp = 120 + (a * 20);
-    s.houndAtk = 5 + levelAtkBonus + (a * 3.5);         // A路線強化改為 +3.5
+    s.houndAtk = 5 + levelAtkBonus + (a * 3); // 強化改為 +3
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
-    s.houndBaseSpeed = 3.5 + (a * 0.4);                 // A路線移動速度強化改為 +0.4
+    s.houndBaseSpeed = 3.5 + (a * 0.4); // 強化改為 +0.4
     
     // 獵犬暴擊機率與倍率
     s.houndCritChance = s.isSpecial ? 0.10 : 0;
@@ -350,7 +353,7 @@ function recalcSummonStats(s) {
 
     s.poisonRadius = 110 + (b * 3); 
     s.poisonInterval = 20; 
-    s.poisonDamage = 2 + (b * 1.5); // 基礎毒圈傷害改為 2，每次升級 +1.5
+    s.poisonDamage = 2 + (b * 1.5); // 基礎改為 2，升級改為 1.5
 
     // Lv 5 減傷維持 15%
     s.summonDamageReduction = s.isSpecial ? 0.15 : 0;
@@ -400,6 +403,49 @@ function updateSummonCountUI() {
 
     document.getElementById('hound-count').innerText = `🐕 ${houndCount}/${player.skillStats.maxHounds}`;
     document.getElementById('frog-count').innerText = `🐸 ${frogCount}/${player.skillStats.maxFrogs}`;
+}
+
+// 新增：護主反擊機制
+function triggerHoundRetaliation(enemy) {
+    if (player.skill !== 'summon') return;
+    // 如果該敵人已經被獵犬鎖定(1v1中)，就不再叫其他獵犬過來，確保 1v1
+    if (enemy.tauntedBy && enemy.tauntedBy.type === 'hound' && enemy.tauntedBy.hp > 0) return;
+
+    let availableHounds = summons.filter(s => s.type === 'hound' && !s.isSpawning && s.hp > 0);
+    if (availableHounds.length === 0) return;
+
+    let bestHound = null;
+    let minDistSq = Infinity;
+    let bestHoundWithCD = null; // 備案：已經在護主狀態中的獵犬
+    let minDistSqWithCD = Infinity;
+
+    // 優先尋找 60 幀內沒有發動過護主的獵犬
+    for (let i = 0; i < availableHounds.length; i++) {
+        let h = availableHounds[i];
+        let dSq = (h.x - enemy.x) * (h.x - enemy.x) + (h.y - enemy.y) * (h.y - enemy.y);
+        
+        if (h.retaliationTimer <= 0) {
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                bestHound = h;
+            }
+        } else {
+            if (dSq < minDistSqWithCD) {
+                minDistSqWithCD = dSq;
+                bestHoundWithCD = h;
+            }
+        }
+    }
+
+    let selectedHound = bestHound || bestHoundWithCD;
+    
+    if (selectedHound) {
+        // 鎖定目標、啟動護主增益 (60幀)
+        selectedHound.target = enemy;
+        enemy.tauntedBy = selectedHound;
+        selectedHound.targetOffset = { x: (selectedHound.size + enemy.size) * 0.75, y: 0 };
+        selectedHound.retaliationTimer = 60;
+    }
 }
 
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
@@ -625,9 +671,12 @@ class Enemy {
 
         this.slowMultiplier = 1.0;
 
+        // 碰觸傷害判定
         if (distSq < targetHitDist * targetHitDist) {
             if (targetObj === player) {
                 player.hp -= 0.5;
+                // 當角色受傷時，呼叫護主獵犬
+                triggerHoundRetaliation(this);
                 if (player.hp <= 0) gameOver(false);
             } else {
                 const reduction = targetObj.damageReduction || 0;
@@ -702,6 +751,9 @@ class Summon {
         this.poisonTimer = 0;
         
         this.killSpeedBuffTimer = 0;
+        
+        // 護主反擊相關屬性
+        this.retaliationTimer = 0;
 
         this.emoji = this.type === 'hound' ? '🐕' : '🐸';
         this.refreshStats(true);
@@ -761,6 +813,12 @@ class Summon {
         if (this.killSpeedBuffTimer > 0) {
             currentSpeed += 1.0; 
             this.killSpeedBuffTimer--;
+        }
+        
+        // 護主反擊：增加跑速 +2
+        if (this.retaliationTimer > 0) {
+            currentSpeed += 2.0;
+            this.retaliationTimer--;
         }
 
         if (this.type === 'frog' && player.skillStats.isSpecial) {
@@ -901,7 +959,12 @@ class Summon {
                         this.killSpeedBuffTimer = 60;
                     }
                     
-                    this.attackCooldown = this.attackInterval;
+                    // 攻擊間隔計算：若處於護主反擊狀態，攻速 -15f
+                    let currentAtkInterval = this.attackInterval;
+                    if (this.retaliationTimer > 0) {
+                        currentAtkInterval = Math.max(1, currentAtkInterval - 15);
+                    }
+                    this.attackCooldown = currentAtkInterval;
                 }
             }
         } else {
@@ -942,7 +1005,8 @@ class Summon {
                 ctx.fill();
             }
 
-            if (this.type === 'hound' && this.killSpeedBuffTimer > 0) {
+            // 顯示獵犬殘影 (擊殺加速或護主反擊時)
+            if (this.type === 'hound' && (this.killSpeedBuffTimer > 0 || this.retaliationTimer > 0)) {
                 ctx.save();
                 ctx.globalAlpha = 0.3;
                 ctx.font = `${this.size * 2}px Arial`;
