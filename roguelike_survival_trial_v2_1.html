@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.28 (星辰追蹤版)</title>
+<title>Roguelike 生存：極限試煉 v7.29 (傷害平衡版)</title>
 <style>
     body {
         margin: 0;
@@ -257,8 +257,8 @@ const skillDefinitions = {
         ],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：魔力爆發',
-            apply: (s) => { s.damage *= 2.5; s.isSpecial = true; }
+            desc: '超級強化：魔力爆發 (傷害 200%)', // 更新選項說明文字
+            apply: (s) => { s.damage *= 2.0; s.isSpecial = true; } // 下調倍率至2.0倍
         }
     },
     frost: {
@@ -772,7 +772,6 @@ class Enemy {
 }
 
 class Summon {
-    // 召喚物類別無更動，保留以確保遊戲運作
     constructor(x, y, type, sourceEnemy = null) {
         this.x = x;
         this.y = y;
@@ -1282,12 +1281,12 @@ class Projectile {
         this.y = y;
         this.target = target;
         this.stats = stats;
-        this.age = 0; // 用於計算轉彎幀數
-        this.speed = isSplit ? stats.speed * 1.5 : stats.speed; // 分裂彈 1.5 倍速
+        this.age = 0; 
+        this.speed = isSplit ? stats.speed * 1.5 : stats.speed; 
         this.isSpecial = stats.isSpecial;
         this.hitEnemies = new Set();
         this.isSplit = isSplit;
-        this.damage = isSplit ? stats.damage * 0.25 : stats.damage; // 分裂彈 25% 傷害
+        this.damage = isSplit ? stats.damage * 0.30 : stats.damage; // 分裂彈傷害上調至 30%
         this.size = isSplit ? 3.5 : (stats.size || 12);
         this.pierce = 1;
 
@@ -1302,23 +1301,19 @@ class Projectile {
     update() {
         this.age++;
         
-        // 嚴格邊界判定：只要飛出畫面外直接銷毀
         if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
             return false;
         }
 
-        // 確認目前的目標是否跑出畫面，如果是則放棄目標
         if (this.target && (this.target.x < 0 || this.target.x > canvas.width || this.target.y < 0 || this.target.y > canvas.height)) {
             this.target = null;
         }
 
-        // 尋找目標（僅鎖定畫面內的敵人）
         if (!this.target || this.target.hp <= 0 || this.target.isFading) {
             let closest = null;
             let minDistSq = Infinity;
             for (let i = 0; i < enemies.length; i++) {
                 let e = enemies[i];
-                // 確認敵人在畫面內才開始鎖定
                 if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
                 const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
                 if (dSq < minDistSq) {
@@ -1329,19 +1324,16 @@ class Projectile {
             this.target = closest;
         }
 
-        // 追蹤轉向邏輯
         if (this.target) {
             let shouldTurn = false;
             let turnAmountDeg = 0;
 
             if (this.isSplit) {
-                // 分裂彈：每 2 幀轉 5 度
                 if (this.age % 2 === 0) {
                     shouldTurn = true;
                     turnAmountDeg = 5;
                 }
             } else {
-                // 主彈：每 3 幀轉 3 度
                 if (this.age % 3 === 0) {
                     shouldTurn = true;
                     turnAmountDeg = 3;
@@ -1397,7 +1389,6 @@ class Projectile {
                             true
                         );
                         splitProj.hitEnemies.add(e);
-                        // 分散射出角度
                         splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
@@ -1423,13 +1414,11 @@ class Projectile {
         ctx.font = this.isSplit ? '16px Arial' : '24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        // 主彈改為 🌟
         ctx.fillText(this.isSplit ? '✨' : '🌟', this.x, this.y);
     }
 }
 
 class FrostEffect {
-    // 冰霜法環邏輯不變
     constructor(x, y, stats) {
         this.x = x;
         this.y = y;
@@ -1554,7 +1543,6 @@ function fireSkill() {
 
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
-            // 只鎖定畫面內的敵人
             if (e.hp <= 0 || e.isFading || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
             const dSq = (e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y);
             if (dSq < minDistSq) {
