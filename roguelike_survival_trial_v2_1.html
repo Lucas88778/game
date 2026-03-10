@@ -1301,7 +1301,8 @@ class Projectile {
     update() {
         this.age++;
         
-        if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+        // 放寬邊界限制，給魔彈迴轉的空間 (畫面外 100px 才銷毀)
+        if (this.x < -100 || this.x > canvas.width + 100 || this.y < -100 || this.y > canvas.height + 100) {
             return false;
         }
 
@@ -1359,16 +1360,39 @@ class Projectile {
                 damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
+                    
+                    // 分裂時，預先找出最近的敵人，讓小魔彈直接朝他飛去
+                    let closestForSplit = null;
+                    let minDSqForSplit = Infinity;
+                    for (let k = 0; k < enemies.length; k++) {
+                        let ek = enemies[k];
+                        if (ek.hp <= 0 || ek.isFading || ek === e) continue; 
+                        let dSq = (ek.x - this.x) * (ek.x - this.x) + (ek.y - this.y) * (ek.y - this.y);
+                        if (dSq < minDSqForSplit) {
+                            minDSqForSplit = dSq;
+                            closestForSplit = ek;
+                        }
+                    }
+
                     for (let j = 0; j < this.stats.splitCount; j++) {
                         let splitProj = new Projectile(
-                            this.x + (Math.random() - 0.5) * 20,
-                            this.y + (Math.random() - 0.5) * 20,
+                            this.x + (Math.random() - 0.5) * 10,
+                            this.y + (Math.random() - 0.5) * 10,
                             null, 
                             this.stats,
                             true
                         );
                         splitProj.hitEnemies.add(e);
-                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
+
+                        if (closestForSplit) {
+                            // 直接瞄準，並給予微小擴散角
+                            let baseAngle = Math.atan2(closestForSplit.y - this.y, closestForSplit.x - this.x);
+                            splitProj.angle = baseAngle + (j - (this.stats.splitCount - 1) / 2) * 0.15;
+                            splitProj.target = closestForSplit;
+                        } else {
+                            splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
+                        }
+                        
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
                         projectiles.push(splitProj);
@@ -1527,36 +1551,11 @@ function fireSkill() {
     }
 
     if (player.skill === 'missile') {
-        // 先尋找距離玩家最近的敵人
-        let closest = null;
-        let minDistSq = Infinity;
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.hp <= 0 || e.isFading) continue;
-            const dSq = (e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y);
-            if (dSq < minDistSq) {
-                minDistSq = dSq;
-                closest = e;
-            }
-        }
-
-        // 計算面向該敵人的角度 (若無敵人預設朝正上方)
-        let baseAngle = -Math.PI / 2;
-        if (closest) {
-            baseAngle = Math.atan2(closest.y - player.y, closest.x - player.x);
-        }
-
         for (let i = 0; i < s.count; i++) {
-            // 在面向敵人的方向生成，加入微小偏移與距離變化，避免魔彈全部疊在一起
-            let offsetAngle = baseAngle + (Math.random() - 0.5) * 0.5;
-            let spawnDist = 25 + Math.random() * 15;
-            let spawnX = player.x + Math.cos(offsetAngle) * spawnDist;
-            let spawnY = player.y + Math.sin(offsetAngle) * spawnDist;
-
             projectiles.push(new Projectile(
-                spawnX,
-                spawnY,
-                closest, // 直接鎖定最近的敵人
+                player.x + (Math.random() - 0.5) * 50,
+                player.y + (Math.random() - 0.5) * 50,
+                null, 
                 s,
                 false
             ));
