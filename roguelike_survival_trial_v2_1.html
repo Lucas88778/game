@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.26 (裂地圓框版)</title>
+<title>Roguelike 生存：極限試煉 v7.27 (星辰魔彈版)</title>
 <style>
     body {
         margin: 0;
@@ -162,7 +162,7 @@
         <h2>Roguelike 生存試煉</h2>
         <p>請選擇你的初始技能：</p>
         <button class="btn btn-start" onclick="startGame('missile')">
-            <span class="emoji">⭐️</span>追蹤魔彈
+            <span class="emoji">🌟</span>追蹤魔彈
         </button>
         <button class="btn btn-start" onclick="startGame('frost')">
             <span class="emoji">❄️</span>冰霜法環
@@ -247,14 +247,14 @@ const skillDefinitions = {
         count: 1,
         speed: 5,
         damage: 15,
-        turnSpeed: 2.0,
+        turnSpeed: 3.0, // 轉彎基礎速度更新為 3 度
         size: 12,
         splitCount: 0,
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '追蹤魔彈+1', apply: (s) => s.count += 1 },
             { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(2, s.cooldown - 10) : Math.max(10, s.cooldown - 10) },
-            { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 2 }
+            { id: 'u3', desc: '擊中後分裂', apply: (s) => s.splitCount += 3 } // 每次升級給予 3 個分裂彈
         ],
         specialUpgrade: {
             id: 's1',
@@ -293,7 +293,6 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            // 已移除 "（冷卻5秒）" 字樣
             desc: '🐸獲得毒圈+\n受擊時🐕衝刺並造成暈眩',
             apply: (s) => {
                 s.isSpecial = true;
@@ -334,7 +333,6 @@ function recalcSummonStats(s) {
     let levelAtkBonus = player.level * 1.25;
     let levelHpBonus = player.level * 10; 
 
-    // 獵犬：閃電刺客
     s.houndHp = 120 + (a * 25); 
     s.houndAtk = 5 + levelAtkBonus + (a * 3); 
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
@@ -343,7 +341,6 @@ function recalcSummonStats(s) {
     s.houndCritChance = 0.10;
     s.houndCritMultiplier = 2.5; 
     
-    // 青蛙：重裝法坦
     s.frogHp = 125 + levelHpBonus + (b * 30); 
     s.frogAtk = 4 + (b * 2);
     s.frogAttackInterval = 30; 
@@ -554,7 +551,6 @@ class TransformPoof {
     }
 }
 
-// 裂地特效 (已加上外圍圓形框框)
 class GroundCrack {
     constructor(x, y, radius) {
         this.x = x;
@@ -577,17 +573,14 @@ class GroundCrack {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
         
-        const crackColor = '#6b3e20'; // 深土色
+        const crackColor = '#6b3e20'; 
 
-        // --- 新增：外圍圓形框框 ---
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.strokeStyle = crackColor;
-        ctx.lineWidth = 2; // 框框線條稍細
+        ctx.lineWidth = 2; 
         ctx.stroke();
-        // ------------------------
 
-        // 繪製裂痕
         ctx.lineWidth = 3;
         ctx.strokeStyle = crackColor;
         ctx.beginPath();
@@ -1094,6 +1087,134 @@ class Summon {
     }
 }
 
+class Projectile {
+    constructor(x, y, target, stats, isSplit = false) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.stats = stats;
+        this.speed = stats.speed;
+        this.isSpecial = stats.isSpecial;
+        this.hitEnemies = new Set();
+        this.isSplit = isSplit;
+        
+        // 分裂彈傷害為母彈的 30%
+        this.damage = isSplit ? stats.damage * 0.30 : stats.damage;
+        this.size = isSplit ? 3.5 : (stats.size || 12);
+        this.pierce = 1;
+        
+        // 基礎旋轉速度為每幀 3 度 (透過建構子引入或直接指定)
+        this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180));
+        
+        // 幀數計數器，用於控制母彈的轉向頻率
+        this.frameCount = 0;
+
+        if (this.target) this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        else this.angle = -Math.PI / 2;
+
+        if (!isSplit) this.angle += (Math.random() - 0.5) * 0.6;
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
+    }
+
+    update() {
+        this.frameCount++;
+        
+        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
+
+        // 自動鎖定並追擊最近的敵人 (動態更新目標)
+        let closest = null;
+        let minDistSq = Infinity;
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            const m = e.size + 10;
+            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
+            const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                closest = e;
+            }
+        }
+        this.target = closest; // 隨時更新為最近目標
+
+        // 轉向邏輯：分裂彈每幀轉，母彈每 2 幀轉一次
+        let canTurn = this.isSplit ? true : (this.frameCount % 2 === 0);
+
+        if (this.target && canTurn) {
+            const dx = this.target.x - this.x;
+            const dy = this.target.y - this.y;
+            const targetAngle = Math.atan2(dy, dx);
+            let angleDiff = targetAngle - this.angle;
+
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad;
+            else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
+
+            this.angle += angleDiff;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
+
+            const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+            if (distSq < (e.size + this.size) * (e.size + this.size)) {
+                let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
+                e.hp -= actualDamage;
+                this.hitEnemies.add(e);
+
+                let textColor = this.isSplit
+                    ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc')
+                    : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
+
+                damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
+
+                if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
+                    for (let j = 0; j < this.stats.splitCount; j++) {
+                        let splitProj = new Projectile(
+                            this.x + (Math.random() - 0.5) * 20,
+                            this.y + (Math.random() - 0.5) * 20,
+                            null,
+                            this.stats,
+                            true
+                        );
+                        splitProj.hitEnemies.add(e);
+                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
+                        splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
+                        splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
+                        projectiles.push(splitProj);
+                    }
+                }
+
+                this.pierce--;
+                if (this.pierce <= 0) return false;
+            }
+        }
+        return true;
+    }
+
+    draw() {
+        if (this.isSpecial) {
+            ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.font = this.isSplit ? '16px Arial' : '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.isSplit ? '✨' : '🌟', this.x, this.y);
+    }
+}
+
 class TetherEffect {
     constructor(target, stats) {
         this.target = target;
@@ -1226,123 +1347,6 @@ class HealDrop {
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fill();
-    }
-}
-
-class Projectile {
-    constructor(x, y, target, stats, isSplit = false) {
-        this.x = x;
-        this.y = y;
-        this.target = target;
-        this.stats = stats;
-        this.speed = stats.speed;
-        this.isSpecial = stats.isSpecial;
-        this.hitEnemies = new Set();
-        this.isSplit = isSplit;
-        this.damage = isSplit ? stats.damage * 0.40 : stats.damage;
-        this.size = isSplit ? 3.5 : (stats.size || 12);
-        this.pierce = 1;
-        this.turnSpeedRad = isSplit ? (3.0 * (Math.PI / 180)) : (stats.turnSpeed * (Math.PI / 180));
-
-        if (this.target) this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-        else this.angle = -Math.PI / 2;
-
-        if (!isSplit) this.angle += (Math.random() - 0.5) * 0.6;
-        this.vx = Math.cos(this.angle) * this.speed;
-        this.vy = Math.sin(this.angle) * this.speed;
-    }
-
-    update() {
-        if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
-
-        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
-            let closest = null;
-            let minDistSq = Infinity;
-            for (let i = 0; i < enemies.length; i++) {
-                let e = enemies[i];
-                const m = e.size + 10;
-                if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < m || e.x > canvas.width - m || e.y < m || e.y > canvas.height - m) continue;
-                const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
-                if (dSq < minDistSq) {
-                    minDistSq = dSq;
-                    closest = e;
-                }
-            }
-            this.target = closest;
-        }
-
-        if (this.target) {
-            const dx = this.target.x - this.x;
-            const dy = this.target.y - this.y;
-            const targetAngle = Math.atan2(dy, dx);
-            let angleDiff = targetAngle - this.angle;
-
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-            if (angleDiff > this.turnSpeedRad) angleDiff = this.turnSpeedRad;
-            else if (angleDiff < -this.turnSpeedRad) angleDiff = -this.turnSpeedRad;
-
-            this.angle += angleDiff;
-            this.vx = Math.cos(this.angle) * this.speed;
-            this.vy = Math.sin(this.angle) * this.speed;
-        }
-
-        this.x += this.vx;
-        this.y += this.vy;
-
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
-
-            const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
-            if (distSq < (e.size + this.size) * (e.size + this.size)) {
-                let actualDamage = (e.type === 'boss') ? this.damage * 0.65 : this.damage;
-                e.hp -= actualDamage;
-                this.hitEnemies.add(e);
-
-                let textColor = this.isSplit
-                    ? ((e.type === 'boss') ? '#e8dfb5' : '#ffffcc')
-                    : ((e.type === 'boss') ? '#ffaa00' : '#ffea00');
-
-                damageTexts.push(new DamageText(e.x, e.y, actualDamage, textColor));
-
-                if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
-                    for (let j = 0; j < this.stats.splitCount; j++) {
-                        let splitProj = new Projectile(
-                            this.x + (Math.random() - 0.5) * 20,
-                            this.y + (Math.random() - 0.5) * 20,
-                            null,
-                            this.stats,
-                            true
-                        );
-                        splitProj.hitEnemies.add(e);
-                        splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
-                        splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
-                        splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
-                        projectiles.push(splitProj);
-                    }
-                }
-
-                this.pierce--;
-                if (this.pierce <= 0) return false;
-            }
-        }
-        return true;
-    }
-
-    draw() {
-        if (this.isSpecial) {
-            ctx.fillStyle = this.isSplit ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 69, 0, 0.4)';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.font = this.isSplit ? '16px Arial' : '24px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.isSplit ? '✨' : '⭐️', this.x, this.y);
     }
 }
 
