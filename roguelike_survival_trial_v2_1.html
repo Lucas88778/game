@@ -266,13 +266,13 @@ const skillDefinitions = {
         name: '冰霜法環',
         cooldown: 120,
         currentCooldown: 0,
-        radius: 50,
+        radius: 40,
         duration: 60,
-        damage: 40,
+        damage: 50,
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
-            { id: 'u2', desc: '增加發動頻率', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(10, s.cooldown - 10) : Math.max(60, s.cooldown - 10) },
+            { id: 'u2', desc: '增加發動頻率\n(無限縮短)', apply: (s) => s.cooldown = Math.max(1, s.cooldown - 10) },
             { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 24 }
         ],
         specialUpgrade: {
@@ -1305,59 +1305,38 @@ class Projectile {
             return false;
         }
 
-        if (this.target && (this.target.x < 0 || this.target.x > canvas.width || this.target.y < 0 || this.target.y > canvas.height)) {
-            this.target = null;
-        }
-
-        if (!this.target || this.target.hp <= 0 || this.target.isFading) {
-            let closest = null;
-            let minDistSq = Infinity;
-            for (let i = 0; i < enemies.length; i++) {
-                let e = enemies[i];
-                if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e) || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-                const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
-                if (dSq < minDistSq) {
-                    minDistSq = dSq;
-                    closest = e;
-                }
+        // 每幀自動重新尋找距離「魔彈本身」最近的敵人
+        let closest = null;
+        let minDistSq = Infinity;
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading || this.hitEnemies.has(e)) continue;
+            const dSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                closest = e;
             }
-            this.target = closest;
         }
+        this.target = closest;
 
         if (this.target) {
-            let shouldTurn = false;
-            let turnAmountDeg = 0;
+            let turnAmountDeg = this.isSplit ? 4 : 2;
+            const dx = this.target.x - this.x;
+            const dy = this.target.y - this.y;
+            const targetAngle = Math.atan2(dy, dx);
+            let angleDiff = targetAngle - this.angle;
 
-            if (this.isSplit) {
-                // 分裂彈：每幀 4 度
-                shouldTurn = true;
-                turnAmountDeg = 4;
-            } else {
-                // 主彈：每 3 幀轉 3 度
-                if (this.age % 3 === 0) {
-                    shouldTurn = true;
-                    turnAmountDeg = 3;
-                }
-            }
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-            if (shouldTurn) {
-                const dx = this.target.x - this.x;
-                const dy = this.target.y - this.y;
-                const targetAngle = Math.atan2(dy, dx);
-                let angleDiff = targetAngle - this.angle;
+            const turnSpeedRad = turnAmountDeg * (Math.PI / 180);
 
-                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            if (angleDiff > turnSpeedRad) angleDiff = turnSpeedRad;
+            else if (angleDiff < -turnSpeedRad) angleDiff = -turnSpeedRad;
 
-                const turnSpeedRad = turnAmountDeg * (Math.PI / 180);
-
-                if (angleDiff > turnSpeedRad) angleDiff = turnSpeedRad;
-                else if (angleDiff < -turnSpeedRad) angleDiff = -turnSpeedRad;
-
-                this.angle += angleDiff;
-                this.vx = Math.cos(this.angle) * this.speed;
-                this.vy = Math.sin(this.angle) * this.speed;
-            }
+            this.angle += angleDiff;
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
         }
 
         this.x += this.vx;
@@ -1384,7 +1363,7 @@ class Projectile {
                         let splitProj = new Projectile(
                             this.x + (Math.random() - 0.5) * 20,
                             this.y + (Math.random() - 0.5) * 20,
-                            null, // 讓分裂彈自己找最近目標
+                            null, 
                             this.stats,
                             true
                         );
@@ -1423,7 +1402,7 @@ class FrostEffect {
         this.x = x;
         this.y = y;
         this.maxRadius = stats.radius;
-        this.radius = 0;
+        this.radius = 0; // 從 0 開始擴展
         this.duration = stats.duration;
         this.maxDuration = stats.duration;
         this.damage = stats.damage;
@@ -1432,40 +1411,50 @@ class FrostEffect {
     }
 
     update() {
-        if (this.radius < this.maxRadius) this.radius += 8;
-        this.duration--;
+        let isExpanding = false;
+        if (this.radius < this.maxRadius) {
+            this.radius += 8;
+            isExpanding = true;
+            if (this.radius > this.maxRadius) {
+                this.radius = this.maxRadius;
+            }
+        }
 
+        this.duration--;
         let elapsedFrames = this.maxDuration - this.duration;
 
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
             if (e.hp <= 0 || e.isFading) continue;
 
-            if ((e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y) < this.radius * this.radius) {
+            const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
+            if (distSq < this.radius * this.radius) {
                 e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6;
 
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e);
-                    e.hp -= this.damage;
-                    damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
+                    
+                    // 只有在冰環擴張階段碰到的才會受到初始爆發傷害
+                    if (isExpanding) {
+                        e.hp -= this.damage;
+                        damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
+                    }
 
+                    // 絕對零度：冰凍效果 (一碰到就判定)
                     if (this.isSpecial) {
                         if (e.type === 'boss') {
-                            if (!this.hitBossesThisCast) this.hitBossesThisCast = new Set();
-                            if (!this.hitBossesThisCast.has(e)) {
-                                this.hitBossesThisCast.add(e);
-                                e.frostHitCount++;
-                                if (e.frostHitCount >= 3) {
-                                    e.frozenTimer = 10;
-                                    e.frostHitCount = 0;
-                                }
+                            e.frostHitCount++;
+                            if (e.frostHitCount >= 3) {
+                                e.frozenTimer = 24;
+                                e.frostHitCount = 0;
                             }
                         } else {
-                            e.frozenTimer = 10;
+                            e.frozenTimer = 24;
                         }
                     }
                 }
 
+                // 後續持續傷害 (每 4 幀 1 點)
                 if (elapsedFrames > 0 && elapsedFrames % 4 === 0) {
                     e.hp -= 1;
                     damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff'));
@@ -1542,7 +1531,7 @@ function fireSkill() {
             projectiles.push(new Projectile(
                 player.x + (Math.random() - 0.5) * 50,
                 player.y + (Math.random() - 0.5) * 50,
-                null, // 讓主魔彈自己去尋找最近的敵人
+                null, 
                 s,
                 false
             ));
@@ -1665,7 +1654,7 @@ function levelUp() {
         document.getElementById('upgrade-title').innerText = "技能強化！";
         let available = [...s.upgrades].filter(choice => {
             if (s.id === 'missile' && choice.id === 'u2' && s.cooldown <= 10) return false;
-            if (s.id === 'frost' && choice.id === 'u2' && s.cooldown <= 60) return false;
+            // 冰霜法環已移除最低冷卻時間限制
             return true;
         });
         
