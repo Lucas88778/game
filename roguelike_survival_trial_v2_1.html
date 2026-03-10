@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.25 (全軍護主版)</title>
+<title>Roguelike 生存：極限試煉 v7.26 (裂地圓框版)</title>
 <style>
     body {
         margin: 0;
@@ -293,7 +293,8 @@ const skillDefinitions = {
         upgrades: [],
         specialUpgrade: {
             id: 's1',
-            desc: '🐸獲得毒圈+\n受擊時🐕衝刺並造成暈眩（冷卻5秒）',
+            // 已移除 "（冷卻5秒）" 字樣
+            desc: '🐸獲得毒圈+\n受擊時🐕衝刺並造成暈眩',
             apply: (s) => {
                 s.isSpecial = true;
                 recalcSummonStats(s);
@@ -324,7 +325,6 @@ function recalcSummonStats(s) {
         passiveFrogs += 1;  
     }
 
-    // 獵犬初始上限為 1
     s.maxHounds = 1 + passiveHounds + c;
     s.maxFrogs = 2 + passiveFrogs + c;
     
@@ -332,10 +332,10 @@ function recalcSummonStats(s) {
     s.tetherDuration = Math.max(15, 360 - passiveFrogConvRed - (c * 28)); 
 
     let levelAtkBonus = player.level * 1.25;
-    let levelHpBonus = player.level * 10; // 青蛙每級改為 +10
+    let levelHpBonus = player.level * 10; 
 
     // 獵犬：閃電刺客
-    s.houndHp = 120 + (a * 25); // HP 強化改為 +25
+    s.houndHp = 120 + (a * 25); 
     s.houndAtk = 5 + levelAtkBonus + (a * 3); 
     s.houndAttackInterval = Math.max(10, 30 - (a * 1.5)); 
     s.houndBaseSpeed = 3.5 + (a * 0.4); 
@@ -344,7 +344,7 @@ function recalcSummonStats(s) {
     s.houndCritMultiplier = 2.5; 
     
     // 青蛙：重裝法坦
-    s.frogHp = 125 + levelHpBonus + (b * 30); // 初始血量提升至 125
+    s.frogHp = 125 + levelHpBonus + (b * 30); 
     s.frogAtk = 4 + (b * 2);
     s.frogAttackInterval = 30; 
     s.frogBaseSpeed = 3.35;
@@ -474,7 +474,6 @@ function startGame(skillId) {
     requestAnimationFrame(gameLoop);
 }
 
-// 觸發護主神犬機制 (全部獵犬共同衝刺)
 function triggerHoundRevenge(aggressor) {
     if (player.skill !== 'summon') return;
     if (!player.skillStats.isSpecial) return; 
@@ -485,7 +484,7 @@ function triggerHoundRevenge(aggressor) {
             s.isDashing = true;
             s.dashTimer = 15; 
             s.target = aggressor;
-            aggressor.tauntedBy = s; // 強制仇恨轉移
+            aggressor.tauntedBy = s; 
             s.attackCooldown = 0; 
             s.trail = []; 
         }
@@ -555,7 +554,7 @@ class TransformPoof {
     }
 }
 
-// 裂地特效 (移除圓形底色，保留並加強裂痕)
+// 裂地特效 (已加上外圍圓形框框)
 class GroundCrack {
     constructor(x, y, radius) {
         this.x = x;
@@ -578,8 +577,19 @@ class GroundCrack {
         ctx.save();
         ctx.globalAlpha = this.life / this.maxLife;
         
+        const crackColor = '#6b3e20'; // 深土色
+
+        // --- 新增：外圍圓形框框 ---
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = crackColor;
+        ctx.lineWidth = 2; // 框框線條稍細
+        ctx.stroke();
+        // ------------------------
+
+        // 繪製裂痕
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#6b3e20'; // 更明顯的深土色
+        ctx.strokeStyle = crackColor;
         ctx.beginPath();
         for (let c of this.cracks) {
             ctx.moveTo(this.x, this.y);
@@ -636,7 +646,7 @@ class Enemy {
         this.frostHitCount = 0;
         this.slowMultiplier = 1.0;
         this.tauntedBy = null;
-        this.hasTriggeredRevenge = false; // 紀錄是否已經觸發過護主
+        this.hasTriggeredRevenge = false; 
 
         this.isFading = false;
         this.fadeDuration = 45;
@@ -646,7 +656,6 @@ class Enemy {
     update() {
         if (this.isFading) return;
 
-        // 暈眩狀態：完全無法移動、無法攻擊
         if (this.stunTimer > 0) {
             this.stunTimer--;
             this.slowMultiplier = 1.0;
@@ -698,7 +707,6 @@ class Enemy {
             if (targetObj === player) {
                 player.hp -= 0.5;
                 
-                // 每個敵人只能觸發一次全軍護主
                 if (!this.hasTriggeredRevenge) {
                     this.hasTriggeredRevenge = true;
                     triggerHoundRevenge(this); 
@@ -873,7 +881,6 @@ class Summon {
                 effects.push(new GroundCrack(this.x, this.y, stunRadius));
                 
                 enemies.forEach(e => {
-                    // 大魔王免疫暈眩
                     if (e.hp > 0 && !e.isFading && e.type !== 'boss') {
                         let dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
                         if (dSq < stunRadius * stunRadius) {
@@ -1055,7 +1062,6 @@ class Summon {
             ctx.fillText(this.emoji, this.x, this.y);
             ctx.restore();
         } else {
-            // 毒圈透明度大幅調低 (0.06)
             if (this.type === 'frog' && player.skillStats.isSpecial) {
                 ctx.fillStyle = 'rgba(118, 255, 3, 0.06)';
                 ctx.beginPath();
