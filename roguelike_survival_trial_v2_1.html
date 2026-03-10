@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Roguelike 生存：極限試煉 v7.29 (傷害平衡版)</title>
+<title>Roguelike 生存：極限試煉 v7.30 (獨立鎖定版)</title>
 <style>
     body {
         margin: 0;
@@ -257,8 +257,8 @@ const skillDefinitions = {
         ],
         specialUpgrade: {
             id: 's1',
-            desc: '超級強化：魔力爆發 (傷害 200%)', // 更新選項說明文字
-            apply: (s) => { s.damage *= 2.0; s.isSpecial = true; } // 下調倍率至2.0倍
+            desc: '超級強化：魔力爆發 (傷害 200%)',
+            apply: (s) => { s.damage *= 2.0; s.isSpecial = true; }
         }
     },
     frost: {
@@ -874,7 +874,7 @@ class Summon {
                     if (e.hp > 0 && !e.isFading && e.type !== 'boss') {
                         let dSq = (e.x - this.x)*(e.x - this.x) + (e.y - this.y)*(e.y - this.y);
                         if (dSq < stunRadius * stunRadius) {
-                            e.stunTimer = 10; 
+                            e.stunTimer = 30; // 延長暈眩時間至 30 幀
                         }
                     }
                 });
@@ -1286,7 +1286,7 @@ class Projectile {
         this.isSpecial = stats.isSpecial;
         this.hitEnemies = new Set();
         this.isSplit = isSplit;
-        this.damage = isSplit ? stats.damage * 0.30 : stats.damage; // 分裂彈傷害上調至 30%
+        this.damage = isSplit ? stats.damage * 0.30 : stats.damage;
         this.size = isSplit ? 3.5 : (stats.size || 12);
         this.pierce = 1;
 
@@ -1329,11 +1329,11 @@ class Projectile {
             let turnAmountDeg = 0;
 
             if (this.isSplit) {
-                if (this.age % 2 === 0) {
-                    shouldTurn = true;
-                    turnAmountDeg = 5;
-                }
+                // 分裂彈：每幀 4 度
+                shouldTurn = true;
+                turnAmountDeg = 4;
             } else {
+                // 主彈：每 3 幀轉 3 度
                 if (this.age % 3 === 0) {
                     shouldTurn = true;
                     turnAmountDeg = 3;
@@ -1384,7 +1384,7 @@ class Projectile {
                         let splitProj = new Projectile(
                             this.x + (Math.random() - 0.5) * 20,
                             this.y + (Math.random() - 0.5) * 20,
-                            null,
+                            null, // 讓分裂彈自己找最近目標
                             this.stats,
                             true
                         );
@@ -1538,24 +1538,11 @@ function fireSkill() {
     }
 
     if (player.skill === 'missile') {
-        let initialTarget = null;
-        let minDistSq = Infinity;
-
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.hp <= 0 || e.isFading || e.x < 0 || e.x > canvas.width || e.y < 0 || e.y > canvas.height) continue;
-            const dSq = (e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y);
-            if (dSq < minDistSq) {
-                minDistSq = dSq;
-                initialTarget = e;
-            }
-        }
-
         for (let i = 0; i < s.count; i++) {
             projectiles.push(new Projectile(
                 player.x + (Math.random() - 0.5) * 50,
                 player.y + (Math.random() - 0.5) * 50,
-                initialTarget,
+                null, // 讓主魔彈自己去尋找最近的敵人
                 s,
                 false
             ));
