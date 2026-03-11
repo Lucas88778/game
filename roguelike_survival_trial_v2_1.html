@@ -1321,7 +1321,8 @@ class Projectile {
         this.target = closest;
 
         if (this.target) {
-            let turnAmountDeg = this.isSplit ? 4 : 2;
+            // 魔彈每幀轉向速度改為 3 度 (分裂小魔彈維持 4 度)
+            let turnAmountDeg = this.isSplit ? 4 : 3;
             const dx = this.target.x - this.x;
             const dy = this.target.y - this.y;
             const targetAngle = Math.atan2(dy, dx);
@@ -1551,11 +1552,36 @@ function fireSkill() {
     }
 
     if (player.skill === 'missile') {
+        
+        // 尋找離玩家最近的怪物
+        let closestE = null;
+        let minDistSq = Infinity;
+        for (let i = 0; i < enemies.length; i++) {
+            let e = enemies[i];
+            if (e.hp <= 0 || e.isFading) continue;
+            let dSq = (e.x - player.x) * (e.x - player.x) + (e.y - player.y) * (e.y - player.y);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                closestE = e;
+            }
+        }
+
+        // 預設發射角度 (如果沒怪物就預設朝上)
+        let spawnAngle = -Math.PI / 2;
+        if (closestE) {
+            spawnAngle = Math.atan2(closestE.y - player.y, closestE.x - player.x);
+        }
+
         for (let i = 0; i < s.count; i++) {
+            // 給予微小隨機擴散角與距離，讓多發魔彈生成時不會完全重疊
+            let angleOffset = (Math.random() - 0.5) * 0.5;
+            let finalAngle = spawnAngle + angleOffset;
+            let spawnDist = 20 + Math.random() * 10; // 生成在離角色 20~30px 的位置
+
             projectiles.push(new Projectile(
-                player.x + (Math.random() - 0.5) * 50,
-                player.y + (Math.random() - 0.5) * 50,
-                null, 
+                player.x + Math.cos(finalAngle) * spawnDist,
+                player.y + Math.sin(finalAngle) * spawnDist,
+                closestE, // 直接把最近的怪物傳進去作為初始鎖定目標
                 s,
                 false
             ));
