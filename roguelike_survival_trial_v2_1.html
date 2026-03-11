@@ -266,14 +266,14 @@ const skillDefinitions = {
         name: '冰霜法環',
         cooldown: 120,
         currentCooldown: 0,
-        radius: 40,
+        radius: 45, // 初始半徑改為 45
         duration: 60,
         damage: 50,
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '縮短發動頻率', apply: (s) => s.cooldown = Math.max(1, s.cooldown - 10) },
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 36 } // 調整為增加 36 幀以拉近整體 DPS 比例
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 36 } 
         ],
         specialUpgrade: {
             id: 's1',
@@ -1448,7 +1448,8 @@ class FrostEffect {
 
             const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
             if (distSq < this.radius * this.radius) {
-                e.slowMultiplier = e.type === 'boss' ? 0.8 : 0.6;
+                // 將一般怪物緩速改為 50% (即速度乘數 0.5)，大魔王則保留一點抗性 (0.75) 以免太容易被風箏
+                e.slowMultiplier = e.type === 'boss' ? 0.75 : 0.5;
 
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e);
