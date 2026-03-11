@@ -246,13 +246,13 @@ const skillDefinitions = {
         currentCooldown: 0,
         count: 1,
         speed: 5,
-        damage: 15,
+        damage: 18,
         size: 12,
         splitCount: 0,
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '追蹤魔彈+1', apply: (s) => s.count += 1 },
-            { id: 'u2', desc: '增加攻擊頻度', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(2, s.cooldown - 10) : Math.max(10, s.cooldown - 10) },
+            { id: 'u2', desc: '攻速增加', apply: (s) => s.cooldown = (player.level === 10) ? Math.max(2, s.cooldown - 10) : Math.max(10, s.cooldown - 10) },
             { id: 'u3', desc: '擊中後分裂 (分裂數量增加)', apply: (s) => s.splitCount += 3 }
         ],
         specialUpgrade: {
@@ -1362,38 +1362,32 @@ class Projectile {
 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     
-                    // 分裂時，預先找出最近的敵人，讓小魔彈直接朝他飛去
-                    let closestForSplit = null;
-                    let minDSqForSplit = Infinity;
-                    for (let k = 0; k < enemies.length; k++) {
-                        let ek = enemies[k];
-                        if (ek.hp <= 0 || ek.isFading || ek === e) continue; 
-                        let dSq = (ek.x - this.x) * (ek.x - this.x) + (ek.y - this.y) * (ek.y - this.y);
-                        if (dSq < minDSqForSplit) {
-                            minDSqForSplit = dSq;
-                            closestForSplit = ek;
-                        }
-                    }
+                    // 分裂時，以主魔彈的反方向為基準生成
+                    let baseAngle = this.angle + Math.PI;
 
                     for (let j = 0; j < this.stats.splitCount; j++) {
                         let splitProj = new Projectile(
                             this.x + (Math.random() - 0.5) * 10,
                             this.y + (Math.random() - 0.5) * 10,
-                            null, 
+                            null, // 讓它在發射後自行尋找最近目標
                             this.stats,
                             true
                         );
                         splitProj.hitEnemies.add(e);
 
-                        if (closestForSplit) {
-                            // 直接瞄準，並給予微小擴散角
-                            let baseAngle = Math.atan2(closestForSplit.y - this.y, closestForSplit.x - this.x);
-                            splitProj.angle = baseAngle + (j - (this.stats.splitCount - 1) / 2) * 0.15;
-                            splitProj.target = closestForSplit;
+                        let splitAngle;
+                        if (this.stats.splitCount === 1) {
+                            // 只有 1 顆就直接往正後方發射
+                            splitAngle = baseAngle;
                         } else {
-                            splitProj.angle = this.angle + (j - (this.stats.splitCount - 1) / 2) * 0.4;
+                            // 2 顆以上，在 120 度內平均分佈
+                            let spread = 120 * (Math.PI / 180); 
+                            let startAngle = baseAngle - spread / 2;
+                            let step = spread / (this.stats.splitCount - 1);
+                            splitAngle = startAngle + step * j;
                         }
-                        
+
+                        splitProj.angle = splitAngle;
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
                         projectiles.push(splitProj);
@@ -1638,7 +1632,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）\n大魔王只會鎖定主角，不會與召喚物1v1\n但召喚物還是可以鎖定他，不過會對所有鎖定他的召喚物造成碰撞傷害";
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）\n大魔王只會鎖定主角，不會與召喚物1v1\n但召快物還是可以鎖定他，不過會對所有鎖定他的召喚物造成碰撞傷害";
             const pathKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
