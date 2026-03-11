@@ -273,7 +273,7 @@ const skillDefinitions = {
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '縮短發動頻率', apply: (s) => s.cooldown = Math.max(1, s.cooldown - 10) },
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 36 } 
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 80 } // 調整為增加 80 幀以精準符合 DPS 期望
         ],
         specialUpgrade: {
             id: 's1',
