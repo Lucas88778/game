@@ -246,7 +246,7 @@ const skillDefinitions = {
         currentCooldown: 0,
         count: 1,
         speed: 5,
-        damage: 18, // 基礎傷害改為 18
+        damage: 18, 
         size: 12,
         splitCount: 0,
         isSpecial: false,
@@ -1419,22 +1419,24 @@ class FrostEffect {
         this.x = x;
         this.y = y;
         this.maxRadius = stats.radius;
-        this.radius = 0; // 從 0 開始擴展
+        this.radius = 0; 
         this.duration = stats.duration;
         this.maxDuration = stats.duration;
         this.damage = stats.damage;
         this.isSpecial = stats.isSpecial;
         this.processedEnemies = new Set();
+        this.expandFrames = 10; // 固定在 10 幀內擴張完畢
+        this.currentExpandFrame = 0;
     }
 
     update() {
         let isExpanding = false;
-        if (this.radius < this.maxRadius) {
-            this.radius += 8;
+        if (this.currentExpandFrame < this.expandFrames) {
+            this.currentExpandFrame++;
+            this.radius = this.maxRadius * (this.currentExpandFrame / this.expandFrames);
             isExpanding = true;
-            if (this.radius > this.maxRadius) {
-                this.radius = this.maxRadius;
-            }
+        } else {
+            this.radius = this.maxRadius; // 確保最終半徑準確
         }
 
         this.duration--;
@@ -1451,30 +1453,30 @@ class FrostEffect {
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e);
                     
-                    // 只有在冰環擴張階段碰到的才會受到初始爆發傷害
+                    // 只有在冰環擴張階段碰到的才會受到初始爆發傷害與冰凍效果
                     if (isExpanding) {
                         e.hp -= this.damage;
                         damageTexts.push(new DamageText(e.x, e.y, this.damage, '#00ffff'));
-                    }
-
-                    // 絕對零度：冰凍效果 (一碰到就判定)
-                    if (this.isSpecial) {
-                        if (e.type === 'boss') {
-                            e.frostHitCount++;
-                            if (e.frostHitCount >= 3) {
+                        
+                        // 絕對零度：冰凍效果 (只有在初始擴張瞬間觸發)
+                        if (this.isSpecial) {
+                            if (e.type === 'boss') {
+                                e.frostHitCount++;
+                                if (e.frostHitCount >= 3) {
+                                    e.frozenTimer = 24;
+                                    e.frostHitCount = 0;
+                                }
+                            } else {
                                 e.frozenTimer = 24;
-                                e.frostHitCount = 0;
                             }
-                        } else {
-                            e.frozenTimer = 24;
                         }
                     }
                 }
 
-                // 後續持續傷害 (每 4 幀 1 點)
-                if (elapsedFrames > 0 && elapsedFrames % 4 === 0) {
-                    e.hp -= 1;
-                    damageTexts.push(new DamageText(e.x, e.y, 1, '#cceeff'));
+                // 後續持續傷害 (每 10 幀 3 點，且避開擴張瞬間)
+                if (elapsedFrames > 0 && elapsedFrames % 10 === 0 && !isExpanding) {
+                    e.hp -= 3;
+                    damageTexts.push(new DamageText(e.x, e.y, 3, '#cceeff'));
                 }
             }
         }
