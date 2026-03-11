@@ -246,7 +246,7 @@ const skillDefinitions = {
         currentCooldown: 0,
         count: 1,
         speed: 5,
-        damage: 18,
+        damage: 18, // 基礎傷害改為 18
         size: 12,
         splitCount: 0,
         isSpecial: false,
@@ -1362,31 +1362,29 @@ class Projectile {
 
                 if (!this.isSplit && this.stats.splitCount > 0 && this.hitEnemies.size === 1) {
                     
-                    // 分裂時，以主魔彈的反方向為基準生成
-                    let baseAngle = this.angle + Math.PI;
+                    // 以主魔彈擊中時的同方向為基準，在正負60度（共120度）內平均散射生成
+                    let splitCount = this.stats.splitCount;
+                    let spreadArc = 120 * (Math.PI / 180); // 120度轉換為弧度
+                    let startAngle = this.angle - spreadArc / 2;
 
-                    for (let j = 0; j < this.stats.splitCount; j++) {
+                    for (let j = 0; j < splitCount; j++) {
+                        let splitAngle;
+                        if (splitCount === 1) {
+                            splitAngle = this.angle;
+                        } else {
+                            splitAngle = startAngle + j * (spreadArc / (splitCount - 1));
+                        }
+
                         let splitProj = new Projectile(
-                            this.x + (Math.random() - 0.5) * 10,
-                            this.y + (Math.random() - 0.5) * 10,
-                            null, // 讓它在發射後自行尋找最近目標
+                            this.x,
+                            this.y,
+                            null, // 生成後第一幀不強制鎖敵，讓它們先以扇形飛出
                             this.stats,
                             true
                         );
                         splitProj.hitEnemies.add(e);
 
-                        let splitAngle;
-                        if (this.stats.splitCount === 1) {
-                            // 只有 1 顆就直接往正後方發射
-                            splitAngle = baseAngle;
-                        } else {
-                            // 2 顆以上，在 120 度內平均分佈
-                            let spread = 120 * (Math.PI / 180); 
-                            let startAngle = baseAngle - spread / 2;
-                            let step = spread / (this.stats.splitCount - 1);
-                            splitAngle = startAngle + step * j;
-                        }
-
+                        // 覆蓋建構子內的初始角度與速度，設定為扇形散射角度
                         splitProj.angle = splitAngle;
                         splitProj.vx = Math.cos(splitProj.angle) * splitProj.speed;
                         splitProj.vy = Math.sin(splitProj.angle) * splitProj.speed;
@@ -1632,7 +1630,7 @@ function levelUp() {
 
     if (player.skill === 'summon') {
         if (player.level === 10) {
-            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）\n大魔王只會鎖定主角，不會與召喚物1v1\n但召快物還是可以鎖定他，不過會對所有鎖定他的召喚物造成碰撞傷害";
+            document.getElementById('upgrade-title').innerText = "第 10 次進化：終極覺醒！\n（三個都點選）\n大魔王只會鎖定主角，不會與召喚物1v1\n但召喚物還是可以鎖定他，不過會對所有鎖定他的召喚物造成碰撞傷害";
             const pathKeys = ['a', 'b', 'c'].filter(key => key === 'c' || s.pathTiers[key] < 8);
 
             if (pathKeys.length === 0) {
