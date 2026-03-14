@@ -266,14 +266,14 @@ const skillDefinitions = {
         name: '冰霜法環',
         cooldown: 120,
         currentCooldown: 0,
-        radius: 45, // 初始半徑改為 45
+        radius: 45, 
         duration: 60,
         damage: 50,
         isSpecial: false,
         upgrades: [
             { id: 'u1', desc: '擴大法環半徑', apply: (s) => s.radius += 30 },
             { id: 'u2', desc: '縮短發動頻率', apply: (s) => s.cooldown = Math.max(1, s.cooldown - 10) },
-            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 80 } // 調整為增加 80 幀以精準符合 DPS 期望
+            { id: 'u3', desc: '增加冰環停留時間', apply: (s) => s.duration += 36 } 
         ],
         specialUpgrade: {
             id: 's1',
@@ -642,7 +642,10 @@ class Enemy {
         this.frozenTimer = 0;
         this.stunTimer = 0; 
         this.frostHitCount = 0;
+        
         this.slowMultiplier = 1.0;
+        this.frostStacks = 0; // 新增：計算被多少個冰霜法環覆蓋
+
         this.tauntedBy = null;
         this.hasTriggeredRevenge = false; 
 
@@ -657,13 +660,29 @@ class Enemy {
         if (this.stunTimer > 0) {
             this.stunTimer--;
             this.slowMultiplier = 1.0;
+            this.frostStacks = 0;
             return; 
         }
 
         if (this.frozenTimer > 0) {
             this.frozenTimer--;
             this.slowMultiplier = 1.0;
+            this.frostStacks = 0;
             return;
+        }
+
+        // 處理冰霜法環的疊加緩速邏輯
+        if (this.frostStacks > 0) {
+            let baseSlow = 0.50; // 第一個法環固定給予 50% 緩速
+            let extraStacks = this.frostStacks - 1;
+            let extraSlow = this.type === 'boss' ? extraStacks * 0.05 : extraStacks * 0.10;
+            let totalSlow = baseSlow + extraSlow;
+            
+            // 限制最高 95% 緩速，確保不會停止或倒退嚕
+            if (totalSlow > 0.95) totalSlow = 0.95; 
+            
+            this.slowMultiplier *= (1.0 - totalSlow);
+            this.frostStacks = 0; // 清除疊加，準備下一幀重新計算
         }
 
         let targetX = player.x;
@@ -699,6 +718,7 @@ class Enemy {
             this.y += (dy / dist) * actualSpeed;
         }
 
+        // 每一幀移動後，重置速度乘數，以便下一幀重新計算（包含牽引與法環）
         this.slowMultiplier = 1.0;
 
         if (distSq < targetHitDist * targetHitDist) {
@@ -1154,7 +1174,8 @@ class TetherEffect {
             return false;
         }
 
-        this.target.slowMultiplier = 1.0 - this.stats.tetherSlow;
+        // 修改為乘法疊加，避免與冰霜法環發生覆蓋衝突
+        this.target.slowMultiplier *= (1.0 - this.stats.tetherSlow);
         this.duration++;
 
         if (this.duration >= this.maxDuration) {
@@ -1448,8 +1469,9 @@ class FrostEffect {
 
             const distSq = (e.x - this.x) * (e.x - this.x) + (e.y - this.y) * (e.y - this.y);
             if (distSq < this.radius * this.radius) {
-                // 將一般怪物緩速改為 50% (即速度乘數 0.5)，大魔王則保留一點抗性 (0.75) 以免太容易被風箏
-                e.slowMultiplier = e.type === 'boss' ? 0.75 : 0.5;
+                
+                // 新增疊加機制：每次被法環掃到，就增加敵人的冰霜層數
+                e.frostStacks++;
 
                 if (!this.processedEnemies.has(e)) {
                     this.processedEnemies.add(e);
@@ -1889,27 +1911,14 @@ function gameLoop() {
     for (let i = gems.length - 1; i >= 0; i--) if (!gems[i].update()) gems.splice(i, 1);
     for (let i = healDrops.length - 1; i >= 0; i--) if (!healDrops[i].update()) healDrops.splice(i, 1);
     for (let i = projectiles.length - 1; i >= 0; i--) if (!projectiles[i].update()) projectiles.splice(i, 1);
+    
+    // 這裡的順序很重要：先更新 effects 結算層數，再更新 enemies 移動
     for (let i = effects.length - 1; i >= 0; i--) if (!effects[i].update()) effects.splice(i, 1);
-    for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
-
-    for (let i = summons.length - 1; i >= 0; i--) {
-        if (!summons[i].update()) {
-            if (summons[i].target && summons[i].target.tauntedBy === summons[i]) summons[i].target.tauntedBy = null;
-            summons.splice(i, 1);
-        }
-    }
-
+    
     for (let i = tethers.length - 1; i >= 0; i--) {
         if (!tethers[i].update()) tethers.splice(i, 1);
     }
-
-    gems.forEach(g => g.draw());
-    healDrops.forEach(h => h.draw());
-    projectiles.forEach(p => p.draw());
-    effects.forEach(e => e.draw());
-    tethers.forEach(t => t.draw());
-    summons.forEach(s => s.draw());
-
+    
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update();
         enemies[i].draw();
@@ -1936,6 +1945,22 @@ function gameLoop() {
             enemies.splice(i, 1);
         }
     }
+
+    for (let i = summons.length - 1; i >= 0; i--) {
+        if (!summons[i].update()) {
+            if (summons[i].target && summons[i].target.tauntedBy === summons[i]) summons[i].target.tauntedBy = null;
+            summons.splice(i, 1);
+        }
+    }
+    
+    for (let i = damageTexts.length - 1; i >= 0; i--) if (!damageTexts[i].update()) damageTexts.splice(i, 1);
+
+    gems.forEach(g => g.draw());
+    healDrops.forEach(h => h.draw());
+    projectiles.forEach(p => p.draw());
+    effects.forEach(e => e.draw());
+    tethers.forEach(t => t.draw());
+    summons.forEach(s => s.draw());
 
     damageTexts.forEach(dt => dt.draw());
 
